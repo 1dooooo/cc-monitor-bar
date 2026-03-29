@@ -1,0 +1,602 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		50C5FBAB2F79FD6A00C816BA /* SQLite in Frameworks */ = {isa = PBXBuildFile; productRef = 50C5F8012F797C0000C816BA /* SQLite */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		50C5F7C82F797BC700C816BA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 50C5F7B02F797BC600C816BA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 50C5F7B72F797BC600C816BA;
+			remoteInfo = "cc-monitor-bar";
+		};
+		50C5F7D22F797BC700C816BA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 50C5F7B02F797BC600C816BA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 50C5F7B72F797BC600C816BA;
+			remoteInfo = "cc-monitor-bar";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		50C5F7B82F797BC600C816BA /* cc-monitor-bar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "cc-monitor-bar.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		50C5F7C72F797BC700C816BA /* cc-monitor-barTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "cc-monitor-barTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		50C5F7D12F797BC700C816BA /* cc-monitor-barUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "cc-monitor-barUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		50C5FC010F00AA0000C816BA /* Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		50C5F7BA2F797BC600C816BA /* cc-monitor-bar */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "cc-monitor-bar";
+			sourceTree = "<group>";
+		};
+		50C5F7CA2F797BC700C816BA /* cc-monitor-barTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "cc-monitor-barTests";
+			sourceTree = "<group>";
+		};
+		50C5F7D42F797BC700C816BA /* cc-monitor-barUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "cc-monitor-barUITests";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		50C5F7B52F797BC600C816BA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				50C5FBAB2F79FD6A00C816BA /* SQLite in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		50C5F7C42F797BC700C816BA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		50C5F7CE2F797BC700C816BA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		50C5F7AF2F797BC600C816BA = {
+			isa = PBXGroup;
+			children = (
+				50C5FC010F00AA0000C816BA /* Local.xcconfig */,
+				50C5F7BA2F797BC600C816BA /* cc-monitor-bar */,
+				50C5F7CA2F797BC700C816BA /* cc-monitor-barTests */,
+				50C5F7D42F797BC700C816BA /* cc-monitor-barUITests */,
+				50C5F7B92F797BC600C816BA /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		50C5F7B92F797BC600C816BA /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				50C5F7B82F797BC600C816BA /* cc-monitor-bar.app */,
+				50C5F7C72F797BC700C816BA /* cc-monitor-barTests.xctest */,
+				50C5F7D12F797BC700C816BA /* cc-monitor-barUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		50C5F7B72F797BC600C816BA /* cc-monitor-bar */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 50C5F7DB2F797BC700C816BA /* Build configuration list for PBXNativeTarget "cc-monitor-bar" */;
+			buildPhases = (
+				50C5F7B42F797BC600C816BA /* Sources */,
+				50C5F7B52F797BC600C816BA /* Frameworks */,
+				50C5F7B62F797BC600C816BA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				50C5F7BA2F797BC600C816BA /* cc-monitor-bar */,
+			);
+			name = "cc-monitor-bar";
+			packageProductDependencies = (
+				50C5F8012F797C0000C816BA /* SQLite */,
+			);
+			productName = "cc-monitor-bar";
+			productReference = 50C5F7B82F797BC600C816BA /* cc-monitor-bar.app */;
+			productType = "com.apple.product-type.application";
+		};
+		50C5F7C62F797BC700C816BA /* cc-monitor-barTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 50C5F7DE2F797BC700C816BA /* Build configuration list for PBXNativeTarget "cc-monitor-barTests" */;
+			buildPhases = (
+				50C5F7C32F797BC700C816BA /* Sources */,
+				50C5F7C42F797BC700C816BA /* Frameworks */,
+				50C5F7C52F797BC700C816BA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				50C5F7C92F797BC700C816BA /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				50C5F7CA2F797BC700C816BA /* cc-monitor-barTests */,
+			);
+			name = "cc-monitor-barTests";
+			packageProductDependencies = (
+			);
+			productName = "cc-monitor-barTests";
+			productReference = 50C5F7C72F797BC700C816BA /* cc-monitor-barTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		50C5F7D02F797BC700C816BA /* cc-monitor-barUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 50C5F7E12F797BC700C816BA /* Build configuration list for PBXNativeTarget "cc-monitor-barUITests" */;
+			buildPhases = (
+				50C5F7CD2F797BC700C816BA /* Sources */,
+				50C5F7CE2F797BC700C816BA /* Frameworks */,
+				50C5F7CF2F797BC700C816BA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				50C5F7D32F797BC700C816BA /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				50C5F7D42F797BC700C816BA /* cc-monitor-barUITests */,
+			);
+			name = "cc-monitor-barUITests";
+			packageProductDependencies = (
+			);
+			productName = "cc-monitor-barUITests";
+			productReference = 50C5F7D12F797BC700C816BA /* cc-monitor-barUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		50C5F7B02F797BC600C816BA /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2630;
+				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					50C5F7B72F797BC600C816BA = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					50C5F7C62F797BC700C816BA = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 50C5F7B72F797BC600C816BA;
+					};
+					50C5F7D02F797BC700C816BA = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 50C5F7B72F797BC600C816BA;
+					};
+				};
+			};
+			buildConfigurationList = 50C5F7B32F797BC600C816BA /* Build configuration list for PBXProject "cc-monitor-bar" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 50C5F7AF2F797BC600C816BA;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				50C5F8002F797C0000C816BA /* XCLocalSwiftPackageReference "SQLite.swift" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 50C5F7B92F797BC600C816BA /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				50C5F7B72F797BC600C816BA /* cc-monitor-bar */,
+				50C5F7C62F797BC700C816BA /* cc-monitor-barTests */,
+				50C5F7D02F797BC700C816BA /* cc-monitor-barUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		50C5F7B62F797BC600C816BA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		50C5F7C52F797BC700C816BA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		50C5F7CF2F797BC700C816BA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		50C5F7B42F797BC600C816BA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		50C5F7C32F797BC700C816BA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		50C5F7CD2F797BC700C816BA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		50C5F7C92F797BC700C816BA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 50C5F7B72F797BC600C816BA /* cc-monitor-bar */;
+			targetProxy = 50C5F7C82F797BC700C816BA /* PBXContainerItemProxy */;
+		};
+		50C5F7D32F797BC700C816BA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 50C5F7B72F797BC600C816BA /* cc-monitor-bar */;
+			targetProxy = 50C5F7D22F797BC700C816BA /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		50C5F7D92F797BC700C816BA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 50C5FC010F00AA0000C816BA /* Local.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		50C5F7DA2F797BC700C816BA /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 50C5FC010F00AA0000C816BA /* Local.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		50C5F7DC2F797BC700C816BA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "cc-monitor-bar/cc-monitor-bar.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.github.cc-monitor-bar.app";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		50C5F7DD2F797BC700C816BA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "cc-monitor-bar/cc-monitor-bar.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.github.cc-monitor-bar.app";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		50C5F7DF2F797BC700C816BA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.github.cc-monitor-bar.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/cc-monitor-bar.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/cc-monitor-bar";
+			};
+			name = Debug;
+		};
+		50C5F7E02F797BC700C816BA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.github.cc-monitor-bar.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/cc-monitor-bar.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/cc-monitor-bar";
+			};
+			name = Release;
+		};
+		50C5F7E22F797BC700C816BA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.github.cc-monitor-bar.uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "cc-monitor-bar";
+			};
+			name = Debug;
+		};
+		50C5F7E32F797BC700C816BA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "io.github.cc-monitor-bar.uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "cc-monitor-bar";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		50C5F7B32F797BC600C816BA /* Build configuration list for PBXProject "cc-monitor-bar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				50C5F7D92F797BC700C816BA /* Debug */,
+				50C5F7DA2F797BC700C816BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		50C5F7DB2F797BC700C816BA /* Build configuration list for PBXNativeTarget "cc-monitor-bar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				50C5F7DC2F797BC700C816BA /* Debug */,
+				50C5F7DD2F797BC700C816BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		50C5F7DE2F797BC700C816BA /* Build configuration list for PBXNativeTarget "cc-monitor-barTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				50C5F7DF2F797BC700C816BA /* Debug */,
+				50C5F7E02F797BC700C816BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		50C5F7E12F797BC700C816BA /* Build configuration list for PBXNativeTarget "cc-monitor-barUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				50C5F7E22F797BC700C816BA /* Debug */,
+				50C5F7E32F797BC700C816BA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		50C5F8002F797C0000C816BA /* XCLocalSwiftPackageReference "SQLite.swift" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = SQLite.swift;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		50C5F8012F797C0000C816BA /* SQLite */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 50C5F8002F797C0000C816BA /* XCLocalSwiftPackageReference "SQLite.swift" */;
+			productName = SQLite;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 50C5F7B02F797BC600C816BA /* Project object */;
+}

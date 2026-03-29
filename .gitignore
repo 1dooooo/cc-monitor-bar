@@ -1,0 +1,27 @@
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.xcscmblueprint
+*.xccheckout
+build/
+.build/
+
+# SPM
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+*.dSYM
+*.dSYM.zip
+
+# IDE
+*.swp
+*~
+.idea/
+.superpowers/
+
+# Xcode local config
+*.xcconfig
+!Example.xcconfig
