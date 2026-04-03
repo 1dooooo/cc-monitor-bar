@@ -35,16 +35,6 @@ struct SnapshotDetail: View {
                     if let tokens = event.tokens {
                         StatCard(title: "Token 总量", value: tokens.formattedTokens)
                     }
-
-                    if !event.toolCalls.isEmpty {
-                        VStack(alignment: .leading, spacing: DesignTokens.spacingXS) {
-                            Text("工具调用")
-                                .font(.caption)
-                                .foregroundColor(Color(nsColor: .secondaryLabelColor))
-                            Text(event.toolCalls)
-                                .font(.caption)
-                        }
-                    }
                 }
                 .padding(DesignTokens.spacingMD)
             }
