@@ -34,7 +34,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover = NSPopover()
         popover?.contentSize = NSSize(width: DesignTokens.popoverWidthStandard, height: DesignTokens.popoverHeight)
         popover?.contentViewController = NSHostingController(
-            rootView: ContentView()
+            rootView: MonitorView()
                 .environmentObject(appState)
         )
         popover?.behavior = .transient
@@ -42,15 +42,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 注册全局快捷键
         let shortcuts = KeyboardShortcuts.shared
-        shortcuts.onSwitchToMinimal = { [weak self] in
-            self?.switchToView(.minimal)
-        }
-        shortcuts.onSwitchToDashboard = { [weak self] in
-            self?.switchToView(.dashboard)
-        }
-        shortcuts.onSwitchToTimeline = { [weak self] in
-            self?.switchToView(.timeline)
-        }
         shortcuts.onOpenSettings = { [weak self] in
             self?.openSettingsItem()
         }
@@ -58,24 +49,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.appState.refreshData()
         }
         shortcuts.start()
-    }
-
-    private func switchToView(_ view: DefaultView) {
-        appState.preferences.setCurrentView(view)
-        appState.preferences.save()
-        NotificationCenter.default.post(name: .switchView, object: view)
-        refreshPopoverContent()
-    }
-
-    private func refreshPopoverContent() {
-        popover?.contentViewController = NSHostingController(
-            rootView: ContentView()
-                .environmentObject(appState)
-        )
-        if popover?.isShown == false, let button = statusItem?.button {
-            popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            NSApp.activate(ignoringOtherApps: true)
-        }
     }
 
     @objc func togglePopover() {
@@ -93,7 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             appState.refreshData()
             popover?.contentViewController = NSHostingController(
-                rootView: ContentView()
+                rootView: MonitorView()
                     .environmentObject(appState)
             )
             popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -104,42 +77,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showContextMenu(button: NSStatusBarButton) {
         let menu = NSMenu()
 
-        let viewMenu = NSMenu()
-        let currentView = appState.preferences.getCurrentView()
-        for view in DefaultView.allCases {
-            let item = NSMenuItem(title: view.displayName, action: #selector(switchView(_:)), keyEquivalent: "")
-            item.representedObject = view
-            if view == currentView {
-                item.state = .on
-            }
-            viewMenu.addItem(item)
-        }
-
-        let viewMenuItem = NSMenuItem(title: "视图", action: nil, keyEquivalent: "")
-        viewMenuItem.submenu = viewMenu
-        menu.addItem(viewMenuItem)
-
+        menu.addItem(NSMenuItem(title: "设置", action: #selector(openSettingsItem), keyEquivalent: ""))
         menu.addItem(.separator())
-
-        let settingsItem = NSMenuItem(title: "设置", action: #selector(openSettingsItem), keyEquivalent: "")
-        menu.addItem(settingsItem)
-
-        menu.addItem(.separator())
-
-        let quitItem = NSMenuItem(title: "退出", action: #selector(quitApp), keyEquivalent: "q")
-        menu.addItem(quitItem)
+        menu.addItem(NSMenuItem(title: "退出", action: #selector(quitApp), keyEquivalent: "q"))
 
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.maxY + 4), in: button)
-    }
-
-    @objc private func switchView(_ sender: NSMenuItem) {
-        guard let view = sender.representedObject as? DefaultView else { return }
-        appState.preferences.setCurrentView(view)
-        appState.preferences.save()
-        popover?.contentViewController = NSHostingController(
-            rootView: ContentView()
-                .environmentObject(appState)
-        )
     }
 
     @objc private func openSettingsItem() {

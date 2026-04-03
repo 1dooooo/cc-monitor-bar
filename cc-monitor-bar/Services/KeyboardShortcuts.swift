@@ -1,7 +1,7 @@
 import AppKit
 
 /// 全局快捷键管理器
-/// ⌘1/2/3 切换视图、⌘, 打开设置、⌘R 刷新数据
+/// ⌘, 打开设置、⌘R 刷新数据
 final class KeyboardShortcuts {
     static let shared = KeyboardShortcuts()
 
@@ -9,9 +9,6 @@ final class KeyboardShortcuts {
     private var localMonitor: Any?
 
     // 回调
-    var onSwitchToMinimal: (() -> Void)?
-    var onSwitchToDashboard: (() -> Void)?
-    var onSwitchToTimeline: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onRefreshData: (() -> Void)?
 
@@ -51,18 +48,9 @@ final class KeyboardShortcuts {
         guard flags.contains(.command), flags.subtracting(.command).isEmpty else { return false }
 
         switch key {
-        case "1": onSwitchToMinimal?(); return true
-        case "2": onSwitchToDashboard?(); return true
-        case "3": onSwitchToTimeline?(); return true
         case ",": onOpenSettings?(); return true
         case "r": onRefreshData?(); return true
         default: return false
         }
     }
-}
-
-// MARK: - 视图切换通知
-
-extension Notification.Name {
-    static let switchView = Notification.Name("cc-monitor-bar.switchView")
 }

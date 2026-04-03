@@ -15,6 +15,13 @@ struct DailyActivity: Codable {
     let messageCount: Int
     let sessionCount: Int
     let toolCallCount: Int
+    let inputTokens: Int64
+    let outputTokens: Int64
+    let cacheTokens: Int64
+
+    var totalTokens: Int64 {
+        inputTokens + outputTokens + cacheTokens
+    }
 }
 
 struct DailyModelTokens: Codable {

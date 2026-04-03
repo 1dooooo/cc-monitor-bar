@@ -25,3 +25,4 @@ Package.resolved
 # Xcode local config
 *.xcconfig
 !Example.xcconfig
+.superpowers/

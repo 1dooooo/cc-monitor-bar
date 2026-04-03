@@ -157,8 +157,8 @@ class AppState: ObservableObject {
                     modelBreakdown: breakdown
                 )
 
-                // 填充最近 7 天的 dailyActivity
-                let weekly = Self.last7Days(from: cache.dailyActivity)
+                // 填充最近 7 天的 dailyActivity（带 Token 数据）
+                let weekly = Self.last7DaysWithTokens(from: cache.dailyActivity, modelUsage: cache.modelUsage)
                 weeklyData = weekly
             } catch {
                 print("读取 stats-cache 失败: \(error)")
@@ -200,7 +200,38 @@ class AppState: ObservableObject {
                 result.append(existing)
             } else {
                 // 补零
-                result.append(DailyActivity(date: dateStr, messageCount: 0, sessionCount: 0, toolCallCount: 0))
+                result.append(DailyActivity(date: dateStr, messageCount: 0, sessionCount: 0, toolCallCount: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0))
+            }
+        }
+
+        return result
+    }
+
+    /// 从 dailyActivity 和 modelUsage 中提取最近 7 天的数据（带 Token 分解）
+    private static func last7DaysWithTokens(from dailyActivity: [DailyActivity], modelUsage: [String: ModelUsage]) -> [DailyActivity] {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        // 构建日期 → DailyActivity 的查找表
+        var activityMap: [String: DailyActivity] = [:]
+        for activity in dailyActivity {
+            activityMap[activity.date] = activity
+        }
+
+        var result: [DailyActivity] = []
+        for offset in (0..<7).reversed() {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            let dateStr = dateFormatter.string(from: date)
+
+            if let existing = activityMap[dateStr] {
+                // 如果有现成的带 Token 数据，直接用
+                result.append(existing)
+            } else {
+                // 补零
+                result.append(DailyActivity(date: dateStr, messageCount: 0, sessionCount: 0, toolCallCount: 0, inputTokens: 0, outputTokens: 0, cacheTokens: 0))
             }
         }
 

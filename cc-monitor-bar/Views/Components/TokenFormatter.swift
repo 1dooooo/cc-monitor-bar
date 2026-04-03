@@ -11,3 +11,10 @@ extension Int64 {
         return "\(self)"
     }
 }
+
+extension Int {
+    /// 格式化 Token 数量为可读字符串
+    var formattedTokens: String {
+        Int64(self).formattedTokens
+    }
+}
