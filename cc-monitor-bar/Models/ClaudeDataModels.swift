@@ -29,6 +29,17 @@ struct DailyModelTokens: Codable {
     let tokensByModel: [String: Int64]
 }
 
+/// 模型用量详情（输入/输出/缓存）
+struct ModelUsageDetail: Codable {
+    let inputTokens: Int64
+    let outputTokens: Int64
+    let cacheTokens: Int64
+
+    var totalTokens: Int64 {
+        inputTokens + outputTokens + cacheTokens
+    }
+}
+
 struct ModelUsage: Codable {
     let inputTokens: Int64
     let outputTokens: Int64

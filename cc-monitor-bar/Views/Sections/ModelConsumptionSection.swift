@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 模型消耗列表
 struct ModelConsumptionSection: View {
-    let modelBreakdown: [(name: String, tokens: Int64)]
+    let modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)]
 
     private var totalTokens: Int64 {
         modelBreakdown.reduce(0) { $0 + $1.tokens }
@@ -18,6 +18,9 @@ struct ModelConsumptionSection: View {
                 ModelRow(
                     name: model.name,
                     tokens: model.tokens,
+                    inputTokens: model.inputTokens,
+                    outputTokens: model.outputTokens,
+                    cacheTokens: model.cacheTokens,
                     total: totalTokens
                 )
             }
@@ -31,6 +34,9 @@ struct ModelConsumptionSection: View {
 struct ModelRow: View {
     let name: String
     let tokens: Int64
+    let inputTokens: Int64
+    let outputTokens: Int64
+    let cacheTokens: Int64
     let total: Int64
 
     private var ratio: CGFloat {
@@ -65,13 +71,13 @@ struct ModelRow: View {
             }
 
             HStack(spacing: DesignTokens.spacingSM) {
-                Text("↑ 0")
+                Text("↑ \(inputTokens.formattedTokens)")
                     .font(.system(size: 9))
                     .foregroundColor(.blue)
-                Text("↓ 0")
+                Text("↓ \(outputTokens.formattedTokens)")
                     .font(.system(size: 9))
                     .foregroundColor(.green)
-                Text("⟳ 0")
+                Text("⟳ \(cacheTokens.formattedTokens)")
                     .font(.system(size: 9))
                     .foregroundColor(.teal)
                 Spacer()
@@ -106,9 +112,9 @@ struct ModelRow: View {
 
 #Preview {
     ModelConsumptionSection(modelBreakdown: [
-        ("claude-sonnet-4-5-20250929", 843_000),
-        ("claude-opus-4-5-20251001", 248_000),
-        ("claude-haiku-4-5-20251001", 149_000),
+        ("claude-sonnet-4-5-20250929", 843_000, 500_000, 300_000, 43_000),
+        ("claude-opus-4-5-20251001", 248_000, 150_000, 80_000, 18_000),
+        ("claude-haiku-4-5-20251001", 149_000, 90_000, 50_000, 9_000),
     ])
     .frame(width: 300)
     .padding()

@@ -22,9 +22,9 @@ struct TokenSummarySection: View {
             }
 
             HStack(spacing: DesignTokens.spacingLG) {
-                TokenDetailRow(label: "↑ 输入", value: (stats?.totalTokens ?? 0) / 3, color: .blue)
-                TokenDetailRow(label: "↓ 输出", value: (stats?.totalTokens ?? 0) / 3, color: .green)
-                TokenDetailRow(label: "⟳ 缓存", value: (stats?.totalTokens ?? 0) / 3, color: .teal)
+                TokenDetailRow(label: "↑ 输入", value: stats?.inputTokens ?? 0, color: .blue)
+                TokenDetailRow(label: "↓ 输出", value: stats?.outputTokens ?? 0, color: .green)
+                TokenDetailRow(label: "⟳ 缓存", value: stats?.cacheTokens ?? 0, color: .teal)
             }
         }
         .padding(DesignTokens.spacingMD)
@@ -56,6 +56,9 @@ struct TokenDetailRow: View {
         sessionCount: 5,
         toolCallCount: 500,
         totalTokens: 1_234_567,
+        inputTokens: 600_000,
+        outputTokens: 400_000,
+        cacheTokens: 234_567,
         modelBreakdown: []
     ))
     .frame(width: 300)

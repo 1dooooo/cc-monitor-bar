@@ -8,7 +8,10 @@ struct TodayStats {
     let sessionCount: Int
     let toolCallCount: Int
     let totalTokens: Int64
-    let modelBreakdown: [(name: String, tokens: Int64)]
+    let inputTokens: Int64
+    let outputTokens: Int64
+    let cacheTokens: Int64
+    let modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)]
 }
 
 class AppState: ObservableObject {
@@ -141,11 +144,23 @@ class AppState: ObservableObject {
                 let latestDay = cache.dailyActivity.last
 
                 var totalTokens: Int64 = 0
-                var breakdown: [(name: String, tokens: Int64)] = []
+                var inputTokens: Int64 = 0
+                var outputTokens: Int64 = 0
+                var cacheTokens: Int64 = 0
+                var breakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)] = []
                 for (model, usage) in cache.modelUsage {
                     let t = usage.inputTokens + usage.outputTokens + usage.cacheReadInputTokens + usage.cacheCreationInputTokens
                     totalTokens += t
-                    breakdown.append((name: model, tokens: t))
+                    inputTokens += usage.inputTokens
+                    outputTokens += usage.outputTokens
+                    cacheTokens += usage.cacheReadInputTokens + usage.cacheCreationInputTokens
+                    breakdown.append((
+                        name: model,
+                        tokens: t,
+                        inputTokens: usage.inputTokens,
+                        outputTokens: usage.outputTokens,
+                        cacheTokens: usage.cacheReadInputTokens + usage.cacheCreationInputTokens
+                    ))
                 }
                 breakdown.sort { $0.tokens > $1.tokens }
 
@@ -154,6 +169,9 @@ class AppState: ObservableObject {
                     sessionCount: latestDay?.sessionCount ?? 0,
                     toolCallCount: latestDay?.toolCallCount ?? 0,
                     totalTokens: totalTokens,
+                    inputTokens: inputTokens,
+                    outputTokens: outputTokens,
+                    cacheTokens: cacheTokens,
                     modelBreakdown: breakdown
                 )
 

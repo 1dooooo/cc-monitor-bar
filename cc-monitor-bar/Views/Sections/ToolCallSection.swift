@@ -3,15 +3,7 @@ import SwiftUI
 /// 工具调用 Top 5
 struct ToolCallSection: View {
     let toolCallCount: Int
-
-    // 模拟数据
-    private let topTools: [(name: String, count: Int)] = [
-        ("Read", 312),
-        ("Bash", 245),
-        ("Edit", 189),
-        ("Glob", 67),
-        ("Grep", 34)
-    ]
+    let topTools: [(name: String, count: Int)]
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.spacingSM) {
@@ -24,9 +16,15 @@ struct ToolCallSection: View {
                     .foregroundColor(.secondary)
             }
 
-            HStack(spacing: DesignTokens.spacingSM) {
-                ForEach(topTools, id: \.name) { tool in
-                    ToolTag(name: tool.name, count: tool.count)
+            if topTools.isEmpty {
+                Text("暂无数据")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                HStack(spacing: DesignTokens.spacingSM) {
+                    ForEach(topTools.prefix(5), id: \.name) { tool in
+                        ToolTag(name: tool.name, count: tool.count)
+                    }
                 }
             }
         }
@@ -67,7 +65,13 @@ struct ToolTag: View {
 }
 
 #Preview {
-    ToolCallSection(toolCallCount: 847)
-        .frame(width: 300)
-        .padding()
+    ToolCallSection(toolCallCount: 847, topTools: [
+        ("Read", 312),
+        ("Bash", 245),
+        ("Edit", 189),
+        ("Glob", 67),
+        ("Grep", 34)
+    ])
+    .frame(width: 300)
+    .padding()
 }
