@@ -12,6 +12,7 @@ struct TodayStats {
     let outputTokens: Int64
     let cacheTokens: Int64
     let modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)]
+    let toolCounts: [String: Int]
 }
 
 enum DataQualityLevel {
@@ -177,6 +178,7 @@ class AppState: ObservableObject {
             var totalOutputTokens = todayUsage.outputTokens
             var totalCacheTokens = todayUsage.cacheTokens
             var breakdown = todayUsage.modelBreakdown
+            var toolCounts = todayUsage.toolCounts
 
             do {
                 let cache = try self.reader.readStatsCache()
@@ -250,7 +252,8 @@ class AppState: ObservableObject {
                 inputTokens: totalInputTokens,
                 outputTokens: totalOutputTokens,
                 cacheTokens: totalCacheTokens,
-                modelBreakdown: breakdown
+                modelBreakdown: breakdown,
+                toolCounts: toolCounts
             )
 
             DispatchQueue.main.async {
@@ -293,7 +296,8 @@ class AppState: ObservableObject {
             inputTokens: Int64,
             outputTokens: Int64,
             cacheTokens: Int64,
-            modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)]
+            modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)],
+            toolCounts: [String: Int]
         ),
         cache: StatsCache,
         todayStr: String

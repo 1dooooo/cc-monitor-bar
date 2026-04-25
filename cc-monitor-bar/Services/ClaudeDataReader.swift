@@ -197,7 +197,8 @@ class ClaudeDataReader {
         inputTokens: Int64,
         outputTokens: Int64,
         cacheTokens: Int64,
-        modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)]
+        modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)],
+        toolCounts: [String: Int]
     ) {
         var messageCount = 0
         var sessionCount = 0
@@ -210,6 +211,7 @@ class ClaudeDataReader {
         var modelInput: [String: Int64] = [:]
         var modelOutput: [String: Int64] = [:]
         var modelCache: [String: Int64] = [:]
+        var toolCounts: [String: Int] = [:]
 
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: Date())
@@ -218,7 +220,7 @@ class ClaudeDataReader {
 
         let projectRoots = availableProjectRoots()
         guard !projectRoots.isEmpty else {
-            return (0, 0, 0, 0, 0, 0, 0, [])
+            return (0, 0, 0, 0, 0, 0, 0, [], [:])
         }
 
         for projectRoot in projectRoots {
@@ -278,6 +280,10 @@ class ClaudeDataReader {
                             modelCache[model, default: 0] += Int64(Double(sessionUsage.cacheReadTokens + sessionUsage.cacheCreationTokens) * ratio)
                         }
                     }
+
+                    for (tool, count) in sessionUsage.toolCounts {
+                        toolCounts[tool, default: 0] += count
+                    }
                 }
             }
         }
@@ -303,7 +309,8 @@ class ClaudeDataReader {
             inputTokens,
             outputTokens,
             cacheTokens,
-            breakdown
+            breakdown,
+            toolCounts
         )
     }
 
@@ -336,6 +343,7 @@ class ClaudeDataReader {
         var messageCount = 0
         var toolUseIds = Set<String>()
         var anonymousToolUseFingerprints = Set<String>()
+        var toolCounts: [String: Int] = [:]
         var messages: [String: IndexedMessageUsage] = [:]
 
         func buildSessionUsage() -> SessionUsage {
@@ -374,7 +382,8 @@ class ClaudeDataReader {
                 messageCount: messageCount,
                 toolCallCount: toolUseIds.count + anonymousToolUseFingerprints.count,
                 models: modelTokens,
-                modelBreakdowns: modelBreakdowns
+                modelBreakdowns: modelBreakdowns,
+                toolCounts: toolCounts
             )
         }
     }
@@ -659,12 +668,15 @@ class ClaudeDataReader {
 
         if let content = message["content"] as? [[String: Any]] {
             for block in content where block["type"] as? String == "tool_use" {
+                let toolName = block["name"] as? String ?? "unknown"
                 if let toolId = block["id"] as? String, !toolId.isEmpty {
                     accumulator.toolUseIds.insert(toolId)
+                    accumulator.toolCounts[toolName, default: 0] += 1
                 } else {
                     accumulator.anonymousToolUseFingerprints.insert(
                         anonymousToolUseFingerprint(block: block, entry: entry, message: message)
                     )
+                    accumulator.toolCounts[toolName, default: 0] += 1
                 }
             }
         }

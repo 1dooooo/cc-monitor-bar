@@ -36,6 +36,7 @@ struct SessionUsage {
     let toolCallCount: Int
     let models: [String: Int64]  // model → total tokens
     let modelBreakdowns: [String: ModelTokenBreakdown]  // model → breakdown
+    let toolCounts: [String: Int]  // tool name → call count
 
     var totalTokens: Int64 {
         inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens
@@ -49,7 +50,8 @@ struct SessionUsage {
         messageCount: Int,
         toolCallCount: Int,
         models: [String: Int64],
-        modelBreakdowns: [String: ModelTokenBreakdown] = [:]
+        modelBreakdowns: [String: ModelTokenBreakdown] = [:],
+        toolCounts: [String: Int] = [:]
     ) {
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
@@ -59,11 +61,12 @@ struct SessionUsage {
         self.toolCallCount = toolCallCount
         self.models = models
         self.modelBreakdowns = modelBreakdowns
+        self.toolCounts = toolCounts
     }
 
     static let zero = SessionUsage(
         inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0,
-        messageCount: 0, toolCallCount: 0, models: [:], modelBreakdowns: [:]
+        messageCount: 0, toolCallCount: 0, models: [:], modelBreakdowns: [:], toolCounts: [:]
     )
 
     func merging(_ other: SessionUsage) -> SessionUsage {
@@ -78,6 +81,11 @@ struct SessionUsage {
             mergedModelBreakdowns[model] = existing.merging(breakdown)
         }
 
+        var mergedToolCounts = toolCounts
+        for (tool, count) in other.toolCounts {
+            mergedToolCounts[tool, default: 0] += count
+        }
+
         return SessionUsage(
             inputTokens: inputTokens + other.inputTokens,
             outputTokens: outputTokens + other.outputTokens,
@@ -86,7 +94,8 @@ struct SessionUsage {
             messageCount: messageCount + other.messageCount,
             toolCallCount: toolCallCount + other.toolCallCount,
             models: mergedModels,
-            modelBreakdowns: mergedModelBreakdowns
+            modelBreakdowns: mergedModelBreakdowns,
+            toolCounts: mergedToolCounts
         )
     }
 }

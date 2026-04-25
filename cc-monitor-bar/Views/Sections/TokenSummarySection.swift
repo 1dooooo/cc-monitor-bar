@@ -89,7 +89,8 @@ struct TokenDetailRow: View {
         inputTokens: 600_000,
         outputTokens: 400_000,
         cacheTokens: 234_567,
-        modelBreakdown: []
+        modelBreakdown: [],
+        toolCounts: [:]
     ), qualityStatus: DataQualityStatus(
         level: .healthy,
         summary: "实时 JSONL 与 cache 校验一致",
