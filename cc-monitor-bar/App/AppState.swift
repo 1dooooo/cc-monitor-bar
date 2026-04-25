@@ -31,6 +31,29 @@ enum DataQualityLevel {
     }
 }
 
+/// 数据质量校验原因分类
+enum DataQualityReason: String {
+    case normal = "正常"
+    case cacheNotYetUpdated = "cache 延迟"
+    case jsonlMissingUsage = "JSONL 解析遗漏"
+    case dataSourceMismatch = "数据源不一致"
+}
+
+/// 单个维度的差异对比详情
+struct DataQualityDiffItem {
+    let dimension: String  // "Token" / "Message" / "Session" / "Tool"
+    let jsonlValue: Int64
+    let cacheValue: Int64
+    let diffRatio: Double
+    let reason: DataQualityReason
+    let suggestion: String
+}
+
+/// diffBreakdown 聚合，四个维度各一条
+struct DataQualityDiffBreakdown {
+    let items: [DataQualityDiffItem]
+}
+
 struct DataQualityStatus {
     let level: DataQualityLevel
     let summary: String
@@ -40,6 +63,7 @@ struct DataQualityStatus {
     let messageDiffRatio: Double?
     let sessionDiffRatio: Double?
     let toolDiffRatio: Double?
+    let diffBreakdown: DataQualityDiffBreakdown?
 }
 
 class AppState: ObservableObject {
@@ -237,7 +261,8 @@ class AppState: ObservableObject {
                     tokenDiffRatio: nil,
                     messageDiffRatio: nil,
                     sessionDiffRatio: nil,
-                    toolDiffRatio: nil
+                    toolDiffRatio: nil,
+                    diffBreakdown: nil
                 )
                 weeklyData = []
             }
@@ -318,7 +343,8 @@ class AppState: ObservableObject {
                 tokenDiffRatio: nil,
                 messageDiffRatio: nil,
                 sessionDiffRatio: nil,
-                toolDiffRatio: nil
+                toolDiffRatio: nil,
+                diffBreakdown: nil
             )
         }
 
@@ -328,6 +354,18 @@ class AppState: ObservableObject {
         let messageDiff = diffRatio(lhs: Int64(todayUsage.messageCount), rhs: Int64(day.messageCount))
         let sessionDiff = diffRatio(lhs: Int64(todayUsage.sessionCount), rhs: Int64(day.sessionCount))
         let toolDiff = diffRatio(lhs: Int64(todayUsage.toolCallCount), rhs: Int64(day.toolCallCount))
+
+        // 构建 diffBreakdown — 每个维度提供详细对比
+        let items = buildDiffBreakdown(
+            todayUsage: todayUsage,
+            day: day,
+            cacheTokens: cacheTokens,
+            tokenDiff: tokenDiff,
+            messageDiff: messageDiff,
+            sessionDiff: sessionDiff,
+            toolDiff: toolDiff,
+            isCacheStale: isCacheStale
+        )
 
         let maxDiff = [tokenDiff, messageDiff, sessionDiff, toolDiff].max() ?? 0
         let level: DataQualityLevel
@@ -354,8 +392,76 @@ class AppState: ObservableObject {
             tokenDiffRatio: tokenDiff,
             messageDiffRatio: messageDiff,
             sessionDiffRatio: sessionDiff,
-            toolDiffRatio: toolDiff
+            toolDiffRatio: toolDiff,
+            diffBreakdown: DataQualityDiffBreakdown(items: items)
         )
+    }
+
+    private static func buildDiffBreakdown(
+        todayUsage: (
+            messageCount: Int, sessionCount: Int, toolCallCount: Int,
+            totalTokens: Int64, inputTokens: Int64, outputTokens: Int64,
+            cacheTokens: Int64, modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)],
+            toolCounts: [String: Int]
+        ),
+        day: DailyActivity,
+        cacheTokens: Int64,
+        tokenDiff: Double,
+        messageDiff: Double,
+        sessionDiff: Double,
+        toolDiff: Double,
+        isCacheStale: Bool
+    ) -> [DataQualityDiffItem] {
+        func reason(for diff: Double) -> DataQualityReason {
+            if diff <= 0.15 { return .normal }
+            if isCacheStale { return .cacheNotYetUpdated }
+            if todayUsage.totalTokens > 0 && cacheTokens == 0 { return .jsonlMissingUsage }
+            return .dataSourceMismatch
+        }
+        func suggestion(for diff: Double, _ reason: DataQualityReason) -> String {
+            if diff <= 0.15 { return "数据一致，无需操作" }
+            switch reason {
+            case .cacheNotYetUpdated: return "等待 stats-cache 下次刷新（通常间隔 5-15 分钟）"
+            case .jsonlMissingUsage: return "检查 JSONL 文件是否包含 assistant usage 记录"
+            case .dataSourceMismatch: return "触发全量重扫以同步数据源"
+            case .normal: return ""
+            }
+        }
+
+        return [
+            DataQualityDiffItem(
+                dimension: "Token",
+                jsonlValue: todayUsage.totalTokens,
+                cacheValue: cacheTokens,
+                diffRatio: tokenDiff,
+                reason: reason(for: tokenDiff),
+                suggestion: suggestion(for: tokenDiff, reason(for: tokenDiff))
+            ),
+            DataQualityDiffItem(
+                dimension: "Message",
+                jsonlValue: Int64(todayUsage.messageCount),
+                cacheValue: Int64(day.messageCount),
+                diffRatio: messageDiff,
+                reason: reason(for: messageDiff),
+                suggestion: suggestion(for: messageDiff, reason(for: messageDiff))
+            ),
+            DataQualityDiffItem(
+                dimension: "Session",
+                jsonlValue: Int64(todayUsage.sessionCount),
+                cacheValue: Int64(day.sessionCount),
+                diffRatio: sessionDiff,
+                reason: reason(for: sessionDiff),
+                suggestion: suggestion(for: sessionDiff, reason(for: sessionDiff))
+            ),
+            DataQualityDiffItem(
+                dimension: "Tool",
+                jsonlValue: Int64(todayUsage.toolCallCount),
+                cacheValue: Int64(day.toolCallCount),
+                diffRatio: toolDiff,
+                reason: reason(for: toolDiff),
+                suggestion: suggestion(for: toolDiff, reason(for: toolDiff))
+            ),
+        ]
     }
 
     static func diffRatio(lhs: Int64, rhs: Int64) -> Double {
