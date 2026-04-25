@@ -258,7 +258,11 @@ class ClaudeDataReader {
     /// 用于避免重复解析未修改的文件
     private func getCachedFileStats(at filePath: String, currentMtime: TimeInterval, currentSize: UInt64) -> SessionUsage? {
         do {
-            let rows = try db.prepare("SELECT mtime, file_size, offset, message_count, tool_call_count, total_tokens FROM processed_files WHERE path = ?", filePath)
+            let rows = try db.prepare("""
+                SELECT mtime, file_size, offset, message_count, tool_call_count,
+                       total_tokens, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens
+                FROM processed_files WHERE path = ?
+                """, filePath)
             for row in rows {
                 let cachedMtime: Double = row[0] as? Double ?? 0
                 let cachedSize: Int64 = row[1] as? Int64 ?? 0
@@ -268,10 +272,14 @@ class ClaudeDataReader {
                 if cachedMtime == currentMtime && UInt64(cachedSize) == currentSize && offset > 0 {
                     let messageCount: Int = row[3] as? Int ?? 0
                     let toolCallCount: Int = row[4] as? Int ?? 0
-                    let totalTokens: Int64 = row[5] as? Int64 ?? 0
+                    let inputTokens: Int64 = row[6] as? Int64 ?? 0
+                    let outputTokens: Int64 = row[7] as? Int64 ?? 0
+                    let cacheReadTokens: Int64 = row[8] as? Int64 ?? 0
+                    let cacheCreationTokens: Int64 = row[9] as? Int64 ?? 0
+                    let totalTokens: Int64 = inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens
                     return SessionUsage(
-                        inputTokens: totalTokens, outputTokens: 0,
-                        cacheReadTokens: 0, cacheCreationTokens: 0,
+                        inputTokens: inputTokens, outputTokens: outputTokens,
+                        cacheReadTokens: cacheReadTokens, cacheCreationTokens: cacheCreationTokens,
                         messageCount: messageCount, toolCallCount: toolCallCount,
                         models: [:], modelBreakdowns: [:], toolCounts: [:],
                         contextTokens: totalTokens
@@ -331,14 +339,15 @@ class ClaudeDataReader {
 
                 for file in jsonlFiles {
                     let filePath = "\(projectPath)/\(file)"
-                    guard let attrs = try? FileManager.default.attributesOfItem(atPath: filePath),
-                          let modDate = attrs[.modificationDate] as? Date,
-                          modDate >= todayStart else { continue }
 
-                    let fileSize = attrs[.size] as? Int64 ?? 0
+                    // 移除 mtime 过滤：依赖 todayRange 日期过滤更可靠
+                    // 某些情况下 Claude 可能跨天写入同一文件
+                    let attrs = try? FileManager.default.attributesOfItem(atPath: filePath)
+                    let fileSize = (attrs?[.size] as? Int64 ?? 0)
+                    let modDate = (attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
 
                     // 增量扫描优化：检查 SQLite 缓存，文件未变更时直接读取缓存统计
-                    var sessionUsage = getCachedFileStats(at: filePath, currentMtime: modDate.timeIntervalSince1970, currentSize: UInt64(fileSize))
+                    var sessionUsage = getCachedFileStats(at: filePath, currentMtime: modDate, currentSize: UInt64(fileSize))
                         ?? parseJsonlUsage(at: filePath, within: todayRange)
 
                     // 纳入子代理数据
@@ -450,14 +459,14 @@ class ClaudeDataReader {
 
                 for file in jsonlFiles {
                     let filePath = "\(projectPath)/\(file)"
-                    guard let attrs = try? FileManager.default.attributesOfItem(atPath: filePath),
-                          let modDate = attrs[.modificationDate] as? Date,
-                          modDate >= todayStart else { continue }
 
-                    let fileSize = attrs[.size] as? Int64 ?? 0
+                    // 移除 mtime 过滤：依赖 todayRange 日期过滤更可靠
+                    let attrs = try? FileManager.default.attributesOfItem(atPath: filePath)
+                    let fileSize = (attrs?[.size] as? Int64 ?? 0)
+                    let modDate = (attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
 
                     // 增量扫描优化：检查 SQLite 缓存，文件未变更时直接读取缓存统计
-                    var sessionUsage = getCachedFileStats(at: filePath, currentMtime: modDate.timeIntervalSince1970, currentSize: UInt64(fileSize))
+                    var sessionUsage = getCachedFileStats(at: filePath, currentMtime: modDate, currentSize: UInt64(fileSize))
                         ?? parseJsonlUsage(at: filePath, within: todayRange)
 
                     let sessionId = file.replacingOccurrences(of: ".jsonl", with: "")
@@ -706,47 +715,11 @@ class ClaudeDataReader {
     // MARK: - SQLite Index Persistence
 
     /// 从 SQLite 加载已处理文件索引到内存
+    /// 注意：不加载 in-memory index 条目（避免 zeroed-out breakdown 问题）
+    /// 缓存命中由 getCachedFileStats() 直接查询 SQLite 处理
     private func loadIndexFromSQLite() {
-        do {
-            let rows = try db.prepare("SELECT path, mtime, file_size, offset, message_count, tool_call_count, total_tokens, last_accessed FROM processed_files")
-            for row in rows {
-                let path: String = row[0] as? String ?? ""
-                let mtime: Double = row[1] as? Double ?? 0
-                let fileSize: Int64 = row[2] as? Int64 ?? 0
-                let offset: Int64 = row[3] as? Int64 ?? 0
-                let messageCount: Int64 = row[4] as? Int64 ?? 0
-                let _: Int64 = row[5] as? Int64 ?? 0
-                let totalTokens: Int64 = row[6] as? Int64 ?? 0
-                let lastAccessed: Double = row[7] as? Double ?? 0
-
-                let accumulator = UsageAccumulator(
-                    messageCount: Int(messageCount),
-                    toolUseIds: [],
-                    anonymousToolUseFingerprints: [],
-                    toolCounts: [:],
-                    contextTokens: totalTokens,
-                    messages: [:]
-                )
-
-                let key = JsonlRangeKey(dateRange: nil)
-                let entry = FileUsageIndexEntry(
-                    offset: UInt64(offset),
-                    carry: Data(),
-                    probeAtOffset: Data(),
-                    fileSize: UInt64(fileSize),
-                    modifiedAt: mtime,
-                    lastAccessAt: lastAccessed,
-                    accumulator: accumulator
-                )
-
-                if usageIndex[path] == nil {
-                    usageIndex[path] = [:]
-                }
-                usageIndex[path]![key] = entry
-            }
-        } catch {
-            // 忽略加载错误
-        }
+        // 不执行加载 — getCachedFileStats() 直接查 SQLite，
+        // parseJsonlUsage() 会重新构建正确的 UsageAccumulator
     }
 
     /// UPSERT 已处理文件索引到 SQLite
@@ -754,8 +727,8 @@ class ClaudeDataReader {
         let sessionUsage = entry.accumulator.buildSessionUsage()
         do {
             _ = try db.run("""
-                INSERT INTO processed_files (path, mtime, file_size, offset, message_count, tool_call_count, total_tokens, last_accessed)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO processed_files (path, mtime, file_size, offset, message_count, tool_call_count, total_tokens, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, last_accessed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(path) DO UPDATE SET
                     mtime = excluded.mtime,
                     file_size = excluded.file_size,
@@ -763,12 +736,20 @@ class ClaudeDataReader {
                     message_count = excluded.message_count,
                     tool_call_count = excluded.tool_call_count,
                     total_tokens = excluded.total_tokens,
+                    input_tokens = excluded.input_tokens,
+                    output_tokens = excluded.output_tokens,
+                    cache_read_tokens = excluded.cache_read_tokens,
+                    cache_creation_tokens = excluded.cache_creation_tokens,
                     last_accessed = excluded.last_accessed
                 """,
                 path, entry.modifiedAt, Int64(entry.fileSize), Int64(entry.offset),
                 Int64(entry.accumulator.messageCount),
                 Int64(entry.accumulator.toolUseIds.count + entry.accumulator.anonymousToolUseFingerprints.count),
                 Int64(sessionUsage.totalTokens),
+                Int64(sessionUsage.inputTokens),
+                Int64(sessionUsage.outputTokens),
+                Int64(sessionUsage.cacheReadTokens),
+                Int64(sessionUsage.cacheCreationTokens),
                 entry.lastAccessAt
             )
         } catch {

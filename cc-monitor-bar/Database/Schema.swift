@@ -5,6 +5,7 @@ enum Schema {
     static func migrate(_ db: Connection) throws {
         try createToolCallsTable(db)
         try createProcessedFilesTable(db)
+        try migrateProcessedFilesTable(db)
         try createSessionTables(db)
     }
 
@@ -40,6 +41,10 @@ enum Schema {
                 message_count INTEGER NOT NULL DEFAULT 0,
                 tool_call_count INTEGER NOT NULL DEFAULT 0,
                 total_tokens INTEGER NOT NULL DEFAULT 0,
+                input_tokens INTEGER NOT NULL DEFAULT 0,
+                output_tokens INTEGER NOT NULL DEFAULT 0,
+                cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+                cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
                 last_accessed REAL NOT NULL
             )
             """)
@@ -51,6 +56,23 @@ enum Schema {
             CREATE INDEX IF NOT EXISTS idx_pf_last_accessed
             ON processed_files(last_accessed)
             """)
+    }
+
+    /// 迁移：为已有的 processed_files 表添加新列（不影响旧 schema）
+    private static func migrateProcessedFilesTable(_ db: Connection) throws {
+        let columns: [(String, String)] = [
+            ("input_tokens", "INTEGER NOT NULL DEFAULT 0"),
+            ("output_tokens", "INTEGER NOT NULL DEFAULT 0"),
+            ("cache_read_tokens", "INTEGER NOT NULL DEFAULT 0"),
+            ("cache_creation_tokens", "INTEGER NOT NULL DEFAULT 0"),
+        ]
+        for (col, def) in columns {
+            do {
+                _ = try db.run("ALTER TABLE processed_files ADD COLUMN \(col) \(def)")
+            } catch {
+                // 列已存在时忽略
+            }
+        }
     }
 
     // MARK: - sessions / session_token_usage / daily_stats / daily_model_usage

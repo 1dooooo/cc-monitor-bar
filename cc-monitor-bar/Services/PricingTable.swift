@@ -9,10 +9,12 @@ struct PricingTable {
         let cachePrice: Double    // 每百万 cache tokens 的价格
     }
 
-    // MARK: - Pricing Data (2025-04 Anthropic 定价)
+    // MARK: - Pricing Data (2025-04 Anthropic 官方定价)
+    // 来源: https://platform.claude.com/docs/en/about-claude/pricing
+    // 价格: USD per 1M tokens
 
     static let models: [String: ModelPricing] = [
-        "claude-opus-4": ModelPricing(inputPrice: 75.0, outputPrice: 375.0, cachePrice: 7.5),
+        "claude-opus-4": ModelPricing(inputPrice: 15.0, outputPrice: 75.0, cachePrice: 1.5),
         "claude-sonnet-4": ModelPricing(inputPrice: 3.0, outputPrice: 15.0, cachePrice: 0.3),
         "claude-3-5-sonnet": ModelPricing(inputPrice: 3.0, outputPrice: 15.0, cachePrice: 0.3),
         "claude-3-haiku": ModelPricing(inputPrice: 0.25, outputPrice: 1.25, cachePrice: 0.03),
@@ -31,7 +33,7 @@ struct PricingTable {
     /// 获取所有模型的默认定价
     static func defaultPricing(for model: String) -> ModelPricing {
         if model.contains("opus") {
-            return ModelPricing(inputPrice: 75.0, outputPrice: 375.0, cachePrice: 7.5)
+            return ModelPricing(inputPrice: 15.0, outputPrice: 75.0, cachePrice: 1.5)
         } else if model.contains("haiku") {
             return ModelPricing(inputPrice: 0.25, outputPrice: 1.25, cachePrice: 0.03)
         } else {
