@@ -49,6 +49,7 @@ class ClaudeDataReader {
     init(paths: ClaudeDataPaths = .init()) {
         self.paths = paths
         try? Schema.migrate(db)
+        loadIndexFromSQLite()
     }
 
     func invalidateUsageIndex() {
@@ -564,7 +565,6 @@ class ClaudeDataReader {
         entry.lastAccessAt = nowEpoch
         perFileEntries[rangeKey] = entry
         usageIndex[path] = perFileEntries
-        cleanupUsageIndexIfNeeded()
 
         let sessionUsage = entry.accumulator.buildSessionUsage()
 
@@ -573,6 +573,10 @@ class ClaudeDataReader {
         if !dedupKeys.isEmpty {
             persistDedupKeys(dedupKeys, file: path)
         }
+
+        // 持久化文件索引到 SQLite（跨重启生效）
+        persistProcessedFileIndex(path: path, entry: entry)
+        cleanupUsageIndexIfNeeded()
 
         return sessionUsage
     }
@@ -595,6 +599,99 @@ class ClaudeDataReader {
             } catch {
                 // 忽略插入错误（可能是并发或磁盘问题）
             }
+        }
+    }
+
+    // MARK: - SQLite Index Persistence
+
+    /// 从 SQLite 加载已处理文件索引到内存
+    private func loadIndexFromSQLite() {
+        do {
+            let rows = try db.prepare("SELECT path, mtime, file_size, offset, message_count, tool_call_count, total_tokens, last_accessed FROM processed_files")
+            for row in rows {
+                let path: String = row[0] as? String ?? ""
+                let mtime: Double = row[1] as? Double ?? 0
+                let fileSize: Int64 = row[2] as? Int64 ?? 0
+                let offset: Int64 = row[3] as? Int64 ?? 0
+                let messageCount: Int64 = row[4] as? Int64 ?? 0
+                let toolCallCount: Int64 = row[5] as? Int64 ?? 0
+                let totalTokens: Int64 = row[6] as? Int64 ?? 0
+                let lastAccessed: Double = row[7] as? Double ?? 0
+
+                let accumulator = UsageAccumulator(
+                    messageCount: Int(messageCount),
+                    toolUseIds: [],
+                    anonymousToolUseFingerprints: [],
+                    toolCounts: [:],
+                    contextTokens: totalTokens,
+                    messages: [:]
+                )
+
+                let key = JsonlRangeKey(dateRange: nil)
+                let entry = FileUsageIndexEntry(
+                    offset: UInt64(offset),
+                    carry: Data(),
+                    probeAtOffset: Data(),
+                    fileSize: UInt64(fileSize),
+                    modifiedAt: mtime,
+                    lastAccessAt: lastAccessed,
+                    accumulator: accumulator
+                )
+
+                if usageIndex[path] == nil {
+                    usageIndex[path] = [:]
+                }
+                usageIndex[path]![key] = entry
+            }
+        } catch {
+            // 忽略加载错误
+        }
+    }
+
+    /// UPSERT 已处理文件索引到 SQLite
+    private func persistProcessedFileIndex(path: String, entry: FileUsageIndexEntry) {
+        let sessionUsage = entry.accumulator.buildSessionUsage()
+        do {
+            _ = try db.run("""
+                INSERT INTO processed_files (path, mtime, file_size, offset, message_count, tool_call_count, total_tokens, last_accessed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(path) DO UPDATE SET
+                    mtime = excluded.mtime,
+                    file_size = excluded.file_size,
+                    offset = excluded.offset,
+                    message_count = excluded.message_count,
+                    tool_call_count = excluded.tool_call_count,
+                    total_tokens = excluded.total_tokens,
+                    last_accessed = excluded.last_accessed
+                """,
+                path, entry.modifiedAt, Int64(entry.fileSize), Int64(entry.offset),
+                Int64(entry.accumulator.messageCount),
+                Int64(entry.accumulator.toolUseIds.count + entry.accumulator.anonymousToolUseFingerprints.count),
+                Int64(sessionUsage.totalTokens),
+                entry.lastAccessAt
+            )
+        } catch {
+            // 忽略写入错误
+        }
+    }
+
+    /// 清理 SQLite 中过旧的索引条目（超过 2000 时按 last_accessed 淘汰）
+    private func cleanupSQLiteIndex() {
+        do {
+            let countValue: Int64 = try db.scalar("SELECT COUNT(*) FROM processed_files") as? Int64 ?? 0
+            if countValue > Int64(maxIndexedFileRanges) {
+                let removeCount = countValue - Int64(maxIndexedFileRanges)
+                _ = try db.run("""
+                    DELETE FROM processed_files
+                    WHERE path IN (
+                        SELECT path FROM processed_files
+                        ORDER BY last_accessed ASC
+                        LIMIT ?
+                    )
+                    """, removeCount)
+            }
+        } catch {
+            // 忽略清理错误
         }
     }
 
@@ -692,6 +789,9 @@ class ClaudeDataReader {
                 usageIndex[item.path] = nil
             }
         }
+
+        // 同步清理 SQLite 中的旧索引
+        cleanupSQLiteIndex()
     }
 
     private func readProbeEnding(at path: String, endOffset: UInt64) -> Data {
