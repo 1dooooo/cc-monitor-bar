@@ -14,15 +14,21 @@ struct ModelConsumptionSection: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            ForEach(modelBreakdown, id: \.name) { model in
-                ModelRow(
-                    name: model.name,
-                    tokens: model.tokens,
-                    inputTokens: model.inputTokens,
-                    outputTokens: model.outputTokens,
-                    cacheTokens: model.cacheTokens,
-                    total: totalTokens
-                )
+            if modelBreakdown.isEmpty {
+                Text("暂无模型数据")
+                    .font(.caption)
+                    .foregroundColor(.secondary.opacity(0.5))
+            } else {
+                ForEach(modelBreakdown, id: \.name) { model in
+                    ModelRow(
+                        name: model.name,
+                        tokens: model.tokens,
+                        inputTokens: model.inputTokens,
+                        outputTokens: model.outputTokens,
+                        cacheTokens: model.cacheTokens,
+                        total: totalTokens
+                    )
+                }
             }
         }
         .padding(DesignTokens.spacingMD)

@@ -391,6 +391,8 @@ class AppState: ObservableObject {
                     self.burnRate = self.burnRateTracker.currentRate
                     self.burnRateLevel = self.burnRateTracker.rateLevel
                     self.isBurnRateActive = self.burnRateTracker.isActive
+                    // 趋势图优先使用 todayStats（JSONL 实时数据），立即刷新
+                    self.loadWeeklyData(todayStats: stats)
                 }
                 self.pollingStates[.todayStats]?.onBackoffReset()
             } catch {
@@ -400,16 +402,18 @@ class AppState: ObservableObject {
         }
     }
 
-    private func loadWeeklyData() {
+    private func loadWeeklyData(todayStats: TodayStats? = nil) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             do {
                 let cache = try self.reader.readStatsCache()
                 let modelRatios = Self.modelRatios(from: cache.modelUsage)
+                // 优先使用 JSONL 实时数据（todayStats 参数传入），避免趋势图显示过时的 cache 数据
                 let weeklyData = Self.last7Days(
                     from: cache.dailyActivity,
                     dailyModelTokens: cache.dailyModelTokens,
-                    modelRatios: modelRatios
+                    modelRatios: modelRatios,
+                    todayStats: todayStats ?? self.todayStats
                 )
                 DispatchQueue.main.async { self.weeklyData = weeklyData }
                 self.pollingStates[.weeklyData]?.onBackoffReset()
@@ -609,12 +613,23 @@ class AppState: ObservableObject {
     }
 
     /// 从 dailyActivity 和 dailyModelTokens 中提取最近 7 天的数据
-    private static func last7Days(from dailyActivity: [DailyActivity], dailyModelTokens: [DailyModelTokens], modelRatios: [String: (input: Double, output: Double, cache: Double)]) -> [DailyActivity] {
+    /// - Parameters:
+    ///   - dailyActivity: stats-cache 中的每日活动统计
+    ///   - dailyModelTokens: stats-cache 中的每日模型 token 数据
+    ///   - modelRatios: 模型 token 拆分比例
+    ///   - todayStats: 实时 JSONL 数据（优先使用），nil 时 fallback 到 cache
+    private static func last7Days(
+        from dailyActivity: [DailyActivity],
+        dailyModelTokens: [DailyModelTokens],
+        modelRatios: [String: (input: Double, output: Double, cache: Double)],
+        todayStats: TodayStats?
+    ) -> [DailyActivity] {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
 
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
+        let todayStr = dateFormatter.string(from: today)
 
         var activityMap: [String: DailyActivity] = [:]
         for activity in dailyActivity {
@@ -631,6 +646,20 @@ class AppState: ObservableObject {
         for offset in (0..<7).reversed() {
             guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
             let dateStr = dateFormatter.string(from: date)
+
+            // 今天优先使用 JSONL 实时数据
+            if offset == 0, let jsonl = todayStats {
+                result.append(DailyActivity(
+                    date: dateStr,
+                    messageCount: jsonl.messageCount,
+                    sessionCount: jsonl.sessionCount,
+                    toolCallCount: jsonl.toolCallCount,
+                    inputTokens: jsonl.inputTokens,
+                    outputTokens: jsonl.outputTokens,
+                    cacheTokens: jsonl.cacheTokens
+                ))
+                continue
+            }
 
             if let existing = activityMap[dateStr] {
                 var inp: Int64 = 0, out: Int64 = 0, cache: Int64 = 0

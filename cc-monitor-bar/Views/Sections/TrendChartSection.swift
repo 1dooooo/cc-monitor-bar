@@ -28,13 +28,29 @@ struct TrendChartSection: View {
             // 堆叠柱状图
             HStack(alignment: .bottom, spacing: 4) {
                 ForEach(weeklyData.prefix(7), id: \.date) { day in
-                    StackedBarDay(
-                        inputTokens: day.inputTokens ?? 0,
-                        outputTokens: day.outputTokens ?? 0,
-                        cacheTokens: day.cacheTokens ?? 0,
-                        maxValue: maxValue,
-                        isToday: isToday(day.date)
-                    )
+                    if day.inputTokens == nil && day.outputTokens == nil && day.cacheTokens == nil {
+                        // 无数据的天显示空占位
+                        VStack(spacing: 0) {
+                            if isToday(day.date) {
+                                Circle()
+                                    .fill(.orange)
+                                    .frame(width: 4, height: 4)
+                                    .padding(.bottom, 2)
+                            }
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.05))
+                                .frame(height: 2)
+                                .cornerRadius(2)
+                        }
+                    } else {
+                        StackedBarDay(
+                            inputTokens: day.inputTokens ?? 0,
+                            outputTokens: day.outputTokens ?? 0,
+                            cacheTokens: day.cacheTokens ?? 0,
+                            maxValue: maxValue,
+                            isToday: isToday(day.date)
+                        )
+                    }
                 }
             }
             .frame(height: 60)
