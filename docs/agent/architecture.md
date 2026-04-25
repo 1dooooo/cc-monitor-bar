@@ -14,8 +14,10 @@
                        ▼
 ┌─────────────────────────────────────────────────────┐
 │  服务层 — 业务逻辑                                    │
-│  ClaudeDataReader    DataPoller    ProjectResolver   │
-│  (文件读取)          (定时轮询)    (项目解析)          │
+│  ClaudeDataReader    DataPoller    FileWatcher       │
+│  (文件读取)          (多频轮询)    (文件监听)         │
+│  BurnRateTracker    NotificationManager              │
+│  (速率计算)          (告警推送)                      │
 └──────────────────────┬──────────────────────────────┘
                        │ 读写
                        ▼
@@ -40,7 +42,7 @@
 ### 1. 实时数据刷新
 
 ```
-Timer (N 秒)
+Timer (10s/30s/60s) 或 FileWatcher 事件
   → AppState.refreshData()
     → [后台线程]
       1. ClaudeDataReader.readActiveSessions()
@@ -51,12 +53,12 @@ Timer (N 秒)
          若 cwd 映射未命中则按 sessionId 跨项目目录兜底查找
          + subagents/*.jsonl
          → SessionUsage (精确 Token 数据)
-      3. ClaudeDataReader.readHistory(limit: 200)
-         读取 ~/.claude/history.jsonl → [HistoryEntry]
-      4. ClaudeDataReader.readTodayUsage()
+      3. ClaudeDataReader.readTodayUsage()
          读取多根目录 projects/*/*.jsonl（按今日时间窗口）→ 今日 Token 精确统计
-      5. ClaudeDataReader.readStatsCache()
-         读取 ~/.claude/stats-cache.json → 今日计数补充 + 7 日趋势 + 质量对账
+      4. ClaudeDataReader.readStatsCache()
+         读取 ~/.claude/stats-cache.json → 今日计数补充 + 7日趋势 + 质量对账
+      5. ClaudeDataReader.readHistory()
+         读取 ~/.claude/history.jsonl → [HistoryEntry]
     → [主线程]
       更新 @Published 属性 → SwiftUI 自动刷新
 ```
@@ -71,32 +73,47 @@ Timer (N 秒)
 2. `type == "assistant"` 且存在 `message.usage` 时，按 `message.id(+requestId)` 去重
 3. 同一条消息按字段取最大值（input/output/cache），再做汇总
 4. `type == "user"` 统计可见用户输入（纯文本或 text/image/file 块，过滤 tool_result/thinking 包装内容）
-5. `tool_use` 按 `tool_use.id` 去重计数
+5. `tool_use` 按 `tool_use.id` 去重计数（保留 tool name 分布）
 6. 同步扫描 `subagents/*.jsonl`，合并子代理数据
 7. 按 `message.model` 统计总量 + 输入/输出/缓存分解
 
 #### 增量解析索引
 
-`ClaudeDataReader` 在内存中维护 JSONL 索引（按 path + 时间窗口）：
+`ClaudeDataReader` 维护内存 + SQLite 双层索引（按 path + 时间窗口）：
 
 1. 记录 `offset/carry/mtime/size`
 2. 文件只追加时，仅解析新增字节
 3. 检测到改写/截断（前缀探针不一致）时自动全量重建
 4. 通过访问时间淘汰旧索引，防止内存增长失控
+5. 索引持久化到 SQLite `processed_files` 表，重启不丢失
 
-这能显著降低固定轮询频率下的重复解析成本，并保持统计口径不变。
+### 3. 核心指标
 
-#### 数据质量校验链路
+#### Burn Rate
+
+- 维护最近 5 分钟的 token 消耗时间序列
+- EMA 平滑：`α = 0.3`
+- 颜色编码：🟢 < 300 / 🟡 300-700 / 🔴 > 700 tokens/min
+
+#### Context Window
+
+- 从 JSONL 解析累计的 `input_tokens`（已包含完整 conversation context）
+- 对比模型 context window 上限
+- 颜色阈值：🟢 < 60% / 🟡 60-85% / 🔴 > 85%
+
+### 4. 数据质量校验链路
 
 ```
 readTodayUsage() (实时 JSONL)
   + readStatsCache() (预聚合 cache)
   → buildDataQualityStatus()
-  → AppState.dataQualityStatus
+  → level: healthy/warning/critical/unavailable
+  → diffRatio: token/message/session/tool 四维差异
+  → reason: cache 延迟 / 解析遗漏 / 数据源不一致
   → TokenSummarySection 校验提示
 ```
 
-### 3. 项目路径转换
+### 5. 项目路径转换
 
 ```
 cwd: "/Users/ido/project/mac/cc-bar"
@@ -120,40 +137,52 @@ cwd: "/Users/ido/project/mac/cc-bar"
 | 文件 | 职责 |
 |------|------|
 | `ClaudeDataReader.swift` | 核心读取服务：stats-cache、sessions、history、per-session JSONL |
-| `DataPoller.swift` | 定时轮询器，触发 AppState 刷新 |
+| `DataPoller.swift` | 多频率定时轮询器，错误指数退避 |
+| `FileWatcher.swift` | DispatchSourceFileSystemObject 文件写入事件监听 |
+| `BurnRateTracker.swift` | Burn Rate 计算（EMA 平滑） |
+| `NotificationManager.swift` | 系统告警推送 |
 | `ProjectResolver.swift` | cwd → projectId 解析（Git 根目录匹配或路径规范化） |
-| `KeyboardShortcuts.swift` | 全局快捷键注册与管理 |
 
 ### 数据层
 
 | 文件 | 职责 |
 |------|------|
-| `DatabaseManager.swift` | SQLite 连接管理，数据库初始化 |
-| `Schema.swift` | 表结构定义（5 张表的 CREATE SQL） |
+| `DatabaseManager.swift` | SQLite 连接管理，WAL 模式 |
+| `Schema.swift` | 表结构定义（5 张已有表 + processed_files + subagent_stats） |
 | `Repository.swift` | CRUD 封装（sessions、token_usage、daily_stats） |
 
 ### 模型层
 
 | 文件 | 职责 |
 |------|------|
-| `Session.swift` | 会话模型 |
+| `ClaudeDataModels.swift` | Claude 本地文件的数据模型（StatsCache、ActiveSessionInfo、DailyActivity 等） |
 | `SessionUsage.swift` | 会话 Token 用量（含 merging 合并子代理） |
-| `TokenUsage.swift` | UI 展示用 Token 用量 |
-| `DailyStats.swift` | 每日统计 |
-| `ToolCall.swift` | 工具调用记录 |
-| `ClaudeDataModels.swift` | Claude 本地文件的数据模型（StatsCache、ActiveSessionInfo 等） |
 
 ## 数据库表结构
 
-| 表 | 主键 | 当前使用状态 |
-|----|------|-------------|
-| sessions | id (TEXT) | Schema 定义，Repository 有 CRUD，AppState 未调用 |
-| session_token_usage | session_id (TEXT) | 同上 |
-| daily_stats | date (TEXT) | 同上 |
-| daily_model_usage | (date, model) 复合 | 同上 |
-| tool_calls | id (INTEGER AUTO) | 同上 |
+| 表 | 主键 | 用途 |
+|----|------|------|
+| `sessions` | id (TEXT) | 会话元数据 |
+| `session_token_usage` | session_id (TEXT) | 会话 Token 用量 |
+| `daily_stats` | date (TEXT) | 每日聚合（含 project_id） |
+| `daily_model_usage` | (date, model) 复合 | 每日 × 模型 Token |
+| `tool_calls` | id (INTEGER AUTO) | 工具调用（含 dedup_key UNIQUE） |
+| `processed_files` | path (TEXT) | 增量索引持久化 |
+| `subagent_stats` | id (TEXT) | Subagent 独立统计 |
 
-> 注意：当前 AppState 直接从文件读取数据，SQLite 持久化层已定义但未接入主数据流。
+## 单面板 UI 结构
+
+```
+MonitorView (ScrollView, 垂直滚动)
+├── TokenSummarySection      # 今日 Token + 数据质量状态
+├── BurnRateSection          # 消耗速率（Phase 4 新增）
+├── TrendChartSection        # 7日堆叠柱状图
+├── ModelConsumptionSection   # 模型消耗分解
+├── ActiveSessionSection      # 活跃会话（含 Context Window）
+├── ProjectSummarySection     # 项目级聚合（Phase 4 新增）
+├── TopToolsSection           # 真实工具调用分布
+└── RecentSessionSection      # 最近会话
+```
 
 ## 主题系统
 
