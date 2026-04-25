@@ -59,6 +59,57 @@
 - Top 5 彩色标签
 - 格式：`工具名 次数`
 
+## 新增 Section（Phase 4 追加）
+
+> 以下 Section 在单面板重构后追加，基于开源项目技术模式采纳。
+
+### 7. Burn Rate 卡片
+
+**来源**: 从 cctray 提取 — 实时消耗速率 + 颜色编码 + 剩余时间预估
+
+- 展示 `当前速率: 423 tokens/min`（5 分钟 EMA 平滑）
+- 颜色编码：🟢 < 300 / 🟡 300-700 / 🔴 > 700 tokens/min
+- 如果 session 还在活跃：显示"预计本 session 剩余时间"
+- 与菜单栏图标颜色共享数据
+
+**涉及文件**: 新建 `Services/BurnRateTracker.swift`，新建 `Views/Sections/BurnRateSection.swift`
+
+### 8. 数据质量诊断面板
+
+**来源**: 从 anjor 提取 — 可解释的诊断（不只是"有错"，而是"为什么错"）
+
+- 数据质量状态指示器（已在 TokenSummarySection 内）
+- 可展开显示详细诊断：
+  - JSONL vs Cache 四个维度的具体差异值
+  - 差异原因分类：`cache 延迟` / `解析遗漏` / `数据源不一致`
+  - 受影响会话列表
+  - 建议操作："等待 stats-cache 刷新" / "手动触发全量重扫"
+
+**涉及文件**: `AppState.swift` (buildDataQualityStatus), `TokenSummarySection.swift`
+
+### 9. 项目聚合 Section
+
+**来源**: 从 specter 提取 — multi-project dashboard
+
+- 项目列表：`[项目名] 今日: 1.2M tokens | 8 sessions`
+- 按 token 用量降序排列
+- 点击展开项目详情（模型分布、趋势、历史会话列表）
+
+**涉及文件**: 新建 `Views/Sections/ProjectSummarySection.swift`，修改 `Database/Schema.swift`（daily_stats 增加 project_id）
+
+### 10. Context Window 追踪
+
+**来源**: 从 anjor 提取 — context window observability
+
+- 活跃会话卡片内嵌 Context Window 进度条
+- 展示：`Context: 142K / 200K (71%)`
+- 颜色阈值：🟢 < 60% / 🟡 60-85% / 🔴 > 85%
+- Subagent 的 context 单独追踪
+
+**涉及文件**: `ClaudeDataReader.swift`（context 追踪），`ActiveSessionSection.swift`（展示）
+
+---
+
 ## 删除的组件
 
 | 组件 | 原因 |
@@ -74,9 +125,10 @@
 
 - AppDelegate / NSPopover 架构不变
 - ClaudeDataReader / DataPoller / ProjectResolver 服务层不变
-- 数据库层和模型不变
+- **新增**: FileWatcher / BurnRateTracker / NotificationManager
+- 数据库层和模型不变（新增 processed_files / subagent_stats 表）
 - 主题系统（三套配色）不变
-- 设置窗口不变（移除「默认视图」选项，因为只有一个视图）
+- 设置窗口不变（移除「默认视图」选项，因为只有一个视图；新增「通知」分区）
 - 全局快捷键：⌘, 打开设置、⌘R 刷新、⎋ 关闭
 
 ## 数据展示变更
@@ -90,20 +142,34 @@
 
 ```
 Views/
-├── MonitorView.swift          # 新主视图（单面板）
+├── MonitorView.swift          # 主视图（单面板，垂直滚动）
 ├── Sections/
-│   ├── TokenSummarySection.swift    # 今日 Token 摘要
+│   ├── TokenSummarySection.swift    # 今日 Token 摘要 + 数据质量
+│   ├── BurnRateSection.swift        # Burn Rate 卡片（Phase 4 追加）
 │   ├── TrendChartSection.swift      # 趋势图（堆叠柱状图）
 │   ├── ModelConsumptionSection.swift # 模型消耗
-│   ├── ActiveSessionSection.swift   # 活跃会话
-│   ├── RecentSessionSection.swift   # 最近会话
-│   └── ToolCallSection.swift        # 工具调用 Top 5
-├── Components/               # 保留复用组件
+│   ├── ActiveSessionSection.swift   # 活跃会话（含 Context Window）
+│   ├── ProjectSummarySection.swift  # 项目聚合（Phase 4 追加）
+│   ├── TopToolsSection.swift        # 真实工具调用分布
+│   └── RecentSessionSection.swift   # 最近会话
+├── Components/               # 复用组件
 │   ├── ProgressBar.swift
 │   ├── Badge.swift
 │   ├── GlassBackground.swift
 │   └── TokenFormatter.swift
 └── Onboarding/               # 保留
+```
+
+新增服务文件（Phase 4 追加）：
+
+```
+Services/
+├── ClaudeDataReader.swift    # 核心读取 + 增量索引
+├── DataPoller.swift          # 多频率轮询 + 指数退避
+├── FileWatcher.swift         # 文件写入事件监听
+├── BurnRateTracker.swift     # Burn Rate 计算（Phase 4 追加）
+├── ProjectResolver.swift     # 项目路径解析
+└── NotificationManager.swift # 通知告警（Phase 3 追加）
 ```
 
 删除：
