@@ -1141,7 +1141,7 @@ class ClaudeDataReader {
         return roots
     }
 
-    private func resolveSessionBasePath(cwd: String, sessionId: String) -> String? {
+    func resolveSessionBasePath(cwd: String, sessionId: String) -> String? {
         let projectDir = cwdToProjectDir(cwd)
         let roots = availableProjectRoots()
 

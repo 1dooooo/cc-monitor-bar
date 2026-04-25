@@ -91,6 +91,8 @@ class AppState: ObservableObject {
     let preferences = AppPreferences.shared
     private let reader = ClaudeDataReader()
     private let resolver = ProjectResolver()
+    private let fileWatcher = FileWatcher()
+    private let hookServer = HookServer()
     private var pollingTimers: [PollingDataType: Timer] = [:]
     private var cancellables = Set<AnyCancellable>()
 
@@ -144,6 +146,8 @@ class AppState: ObservableObject {
         for timer in pollingTimers.values {
             timer.invalidate()
         }
+        fileWatcher.stopAll()
+        hookServer?.stop()
     }
 
     // MARK: - Multi-Frequency Polling
@@ -162,6 +166,22 @@ class AppState: ObservableObject {
             self?.tickPolling()
         }
         pollingTimers[.sessions] = timer  // 只需一个 tick 定时器
+
+        // 设置文件监听：活跃会话 JSONL 文件变更时立即刷新
+        fileWatcher.setOnChangeHandler { [weak self] _ in
+            // 文件变更时立即触发会话 + 统计刷新
+            self?.loadSessions()
+            self?.loadTodayStats()
+        }
+
+        // 设置 hooks 监听：Claude Code 工具调用事件到达时立即刷新
+        hookServer?.setEventHandler { [weak self] event in
+            guard event.isPostTool else { return }
+            // PostToolUse 事件触发时立即刷新会话和统计
+            self?.loadSessions()
+            self?.loadTodayStats()
+        }
+        hookServer?.start()
 
         // 监听刷新间隔变更，重建定时器（兼容旧偏好设置）
         preferences.$refreshInterval
@@ -202,6 +222,7 @@ class AppState: ObservableObject {
                 let sessionInfos = try self.reader.readActiveSessions()
                 var active: [Session] = []
                 var usages: [String: SessionUsage] = [:]
+                var jsonlPaths: Set<String> = []
                 for info in sessionInfos {
                     let projectId = self.resolver.resolveProjectId(from: info.cwd)
                     let usage = self.reader.readSessionUsage(cwd: info.cwd, sessionId: info.sessionId)
@@ -216,10 +237,16 @@ class AppState: ObservableObject {
                         toolCallCount: usage.toolCallCount,
                         entrypoint: info.entrypoint
                     ))
+                    // 收集 JSONL 文件路径（用于文件监听）
+                    if let basePath = self.reader.resolveSessionBasePath(cwd: info.cwd, sessionId: info.sessionId) {
+                        jsonlPaths.insert("\(basePath).jsonl")
+                    }
                 }
                 // 持久化到 SQLite
                 let tuples = active.map { ($0.id, $0.pid, $0.projectPath, $0.projectId, $0.startedAt, $0.messageCount, $0.toolCallCount, $0.entrypoint) }
                 self.reader.persistSessions(tuples, usages: usages)
+                // 更新文件监听列表
+                self.fileWatcher.watch(paths: jsonlPaths)
                 DispatchQueue.main.async {
                     self.currentSessions = active
                     self.sessionUsages = usages
