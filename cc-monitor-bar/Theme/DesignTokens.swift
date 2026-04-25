@@ -1,5 +1,23 @@
 import SwiftUI
 
+/// 密度模式全局访问器
+enum DensityMode: String, CaseIterable, Codable, Identifiable {
+    case compact = "compact"
+    case standard = "standard"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .compact: return "紧凑"
+        case .standard: return "标准"
+        }
+    }
+
+    /// 当前活动的密度模式（由 AppState 同步）
+    static var current: DensityMode = .standard
+}
+
 /// 设计系统 Token — 间距、圆角、尺寸、动画常量
 /// 所有 UI 组件应通过此结构体引用设计参数，而非硬编码数值
 enum DesignTokens {
@@ -7,15 +25,15 @@ enum DesignTokens {
     // MARK: - 间距
 
     /// 行内间距、紧凑元素内边距
-    static let spacingXS: CGFloat = 4
+    static var spacingXS: CGFloat { DensityMode.current == .compact ? 2 : 4 }
     /// 卡片内边距、同组元素间距
-    static let spacingSM: CGFloat = 8
+    static var spacingSM: CGFloat { DensityMode.current == .compact ? 4 : 8 }
     /// 区块间距、卡片间距
-    static let spacingMD: CGFloat = 12
+    static var spacingMD: CGFloat { DensityMode.current == .compact ? 6 : 12 }
     /// 外边距、大区块间距
-    static let spacingLG: CGFloat = 16
+    static var spacingLG: CGFloat { DensityMode.current == .compact ? 8 : 16 }
     /// 页面级间距、大标题上方
-    static let spacingXL: CGFloat = 20
+    static var spacingXL: CGFloat { DensityMode.current == .compact ? 12 : 20 }
 
     // MARK: - 圆角
 

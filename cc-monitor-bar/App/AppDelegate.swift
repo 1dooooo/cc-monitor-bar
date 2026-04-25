@@ -31,6 +31,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
+        // 4.1 动态菜单栏图标 — 根据活跃会话数和 Burn Rate 更新状态栏
+        setupDynamicStatusBarIcon()
+
         popover = NSPopover()
         popover?.contentSize = NSSize(width: DesignTokens.popoverWidthStandard, height: DesignTokens.popoverHeight)
         popover?.contentViewController = NSHostingController(
@@ -105,5 +108,71 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .dark:
             NSApp.appearance = NSAppearance(named: .darkAqua)
         }
+    }
+
+    // MARK: - 4.1 动态菜单栏图标
+
+    private func setupDynamicStatusBarIcon() {
+        // 监听活跃会话数变化
+        appState.$currentSessions
+            .receive(on: RunLoop.main)
+            .sink { [weak self] sessions in
+                self?.updateStatusBarIcon(sessionCount: sessions.count)
+            }
+            .store(in: &cancellables)
+
+        // 监听 Burn Rate 变化
+        appState.$burnRateLevel
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, let button = statusItem?.button else { return }
+                let sessionCount = appState.currentSessions.count
+                updateStatusBarIcon(sessionCount: sessionCount)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func updateStatusBarIcon(sessionCount: Int) {
+        guard let button = statusItem?.button else { return }
+
+        let rateLevel = appState.burnRateLevel
+        let isActive = sessionCount > 0
+
+        // 根据 Burn Rate 设置颜色
+        let color: NSColor
+        switch rateLevel {
+        case .idle:
+            color = .systemGray
+        case .active:
+            color = .systemOrange
+        case .heavy:
+            color = .systemRed
+        }
+
+        // 设置图标
+        let symbolName = isActive ? "chart.bar.fill" : "chart.bar"
+        if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "CC Monitor") {
+            image.setTintColor(color)
+            button.image = image
+        }
+
+        // 显示会话数作为附加文本
+        if isActive {
+            button.title = " \(sessionCount)"
+        } else {
+            button.title = ""
+        }
+    }
+}
+
+// MARK: - NSImage Extension
+
+extension NSImage {
+    func setTintColor(_ color: NSColor) {
+        self.lockFocus()
+        color.set()
+        let imageRect = NSRect(origin: .zero, size: self.size)
+        imageRect.fill(using: .sourceIn)
+        self.unlockFocus()
     }
 }

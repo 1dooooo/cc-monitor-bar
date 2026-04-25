@@ -122,6 +122,14 @@ class AppPreferences: ObservableObject {
     @Published var appearanceMode: AppearanceMode = .system
     @Published var colorTheme: ColorTheme = .native
 
+    // MARK: - UI 模式设置
+
+    /// 密度模式: compact = 紧凑, standard = 标准
+    @Published var densityMode: DensityMode = .standard
+
+    /// 用户折叠的区块 ID 列表
+    @Published var collapsedSections: Set<String> = []
+
     // MARK: - 存储设置
 
     @Published var dataRetentionPolicy: DataRetentionPolicy = .days30
@@ -143,6 +151,8 @@ class AppPreferences: ObservableObject {
         static let colorTheme = "colorTheme"
         static let dataRetentionPolicy = "dataRetentionPolicy"
         static let sqlitePath = "sqlitePath"
+        static let densityMode = "densityMode"
+        static let collapsedSections = "collapsedSections"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -170,6 +180,10 @@ class AppPreferences: ObservableObject {
         colorTheme = ColorTheme(rawValue: defaults.string(forKey: Keys.colorTheme) ?? ColorTheme.native.rawValue) ?? .native
         dataRetentionPolicy = DataRetentionPolicy(rawValue: defaults.string(forKey: Keys.dataRetentionPolicy) ?? DataRetentionPolicy.days30.rawValue) ?? .days30
         sqlitePath = defaults.string(forKey: Keys.sqlitePath) ?? defaultPath
+        densityMode = DensityMode(rawValue: defaults.string(forKey: Keys.densityMode) ?? DensityMode.standard.rawValue) ?? .standard
+        if let saved = defaults.array(forKey: Keys.collapsedSections) as? [String] {
+            collapsedSections = Set(saved)
+        }
     }
 
     func save() {
@@ -187,6 +201,8 @@ class AppPreferences: ObservableObject {
         defaults.set(colorTheme.rawValue, forKey: Keys.colorTheme)
         defaults.set(dataRetentionPolicy.rawValue, forKey: Keys.dataRetentionPolicy)
         defaults.set(sqlitePath, forKey: Keys.sqlitePath)
+        defaults.set(densityMode.rawValue, forKey: Keys.densityMode)
+        defaults.set(Array(collapsedSections), forKey: Keys.collapsedSections)
     }
 
     // MARK: - 视图切换辅助方法
