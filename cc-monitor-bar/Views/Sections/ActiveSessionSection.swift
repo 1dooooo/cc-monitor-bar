@@ -4,6 +4,7 @@ import SwiftUI
 struct ActiveSessionSection: View {
     let sessions: [Session]
     let usages: [String: SessionUsage]
+    @State private var selectedSession: Session?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.spacingSM) {
@@ -18,11 +19,17 @@ struct ActiveSessionSection: View {
 
             ForEach(sessions, id: \.id) { session in
                 SessionCard(session: session, usage: usages[session.id])
+                    .onTapGesture {
+                        selectedSession = session
+                    }
             }
         }
         .padding(DesignTokens.spacingMD)
         .background(GlassBackground().opacity(0.04))
         .cornerRadius(DesignTokens.radiusMD)
+        .sheet(item: $selectedSession) { session in
+            SessionDetailSheet(session: session, usage: usages[session.id] ?? .zero)
+        }
     }
 }
 
