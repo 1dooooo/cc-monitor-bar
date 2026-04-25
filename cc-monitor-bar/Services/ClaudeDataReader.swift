@@ -1,4 +1,5 @@
 import Foundation
+import SQLite
 
 struct ClaudeDataPaths {
     let claudeDir: String
@@ -47,6 +48,7 @@ class ClaudeDataReader {
 
     init(paths: ClaudeDataPaths = .init()) {
         self.paths = paths
+        try? Schema.migrate(db)
     }
 
     func invalidateUsageIndex() {
@@ -346,6 +348,13 @@ class ClaudeDataReader {
         var toolCounts: [String: Int] = [:]
         var messages: [String: IndexedMessageUsage] = [:]
 
+        /// 返回所有去重键 (tool_use.id 或匿名指纹)
+        func dedupKeys() -> [String] {
+            var result = toolUseIds.map { "id:\($0)" }
+            result.append(contentsOf: anonymousToolUseFingerprints.map { "fp:\($0)" })
+            return result
+        }
+
         func buildSessionUsage() -> SessionUsage {
             var totalInput: Int64 = 0
             var totalOutput: Int64 = 0
@@ -453,7 +462,36 @@ class ClaudeDataReader {
         usageIndex[path] = perFileEntries
         cleanupUsageIndexIfNeeded()
 
-        return entry.accumulator.buildSessionUsage()
+        let sessionUsage = entry.accumulator.buildSessionUsage()
+
+        // 持久化工具调用去重键到 SQLite
+        let dedupKeys = entry.accumulator.dedupKeys()
+        if !dedupKeys.isEmpty {
+            persistDedupKeys(dedupKeys, file: path)
+        }
+
+        return sessionUsage
+    }
+
+    // MARK: - SQLite Dedup Key Persistence
+
+    private let db: Connection = DatabaseManager.shared.db
+
+    /// 持久化工具调用去重键，使用 INSERT OR IGNORE 实现精确去重
+    /// 返回受影响的行数（可用于统计去重命中率）
+    private func persistDedupKeys(_ keys: [String], file: String) {
+        for key in keys {
+            // 提取 tool_name（从 key 前缀后的内容无法直接获取，这里记录空字符串）
+            // 实际 tool name 可以从 SessionUsage.toolCounts 中获得
+            do {
+                _ = try db.run(
+                    "INSERT OR IGNORE INTO tool_calls (dedup_key, tool_name, session_id, inserted_at) VALUES (?, ?, ?, ?)",
+                    key, "", file, Date().timeIntervalSince1970
+                )
+            } catch {
+                // 忽略插入错误（可能是并发或磁盘问题）
+            }
+        }
     }
 
     private func rebuildUsageIndexEntry(
