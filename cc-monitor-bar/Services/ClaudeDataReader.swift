@@ -346,6 +346,7 @@ class ClaudeDataReader {
         var toolUseIds = Set<String>()
         var anonymousToolUseFingerprints = Set<String>()
         var toolCounts: [String: Int] = [:]
+        var contextTokens: Int64 = 0  // 累计 context 使用量
         var messages: [String: IndexedMessageUsage] = [:]
 
         /// 返回所有去重键 (tool_use.id 或匿名指纹)
@@ -392,7 +393,8 @@ class ClaudeDataReader {
                 toolCallCount: toolUseIds.count + anonymousToolUseFingerprints.count,
                 models: modelTokens,
                 modelBreakdowns: modelBreakdowns,
-                toolCounts: toolCounts
+                toolCounts: toolCounts,
+                contextTokens: contextTokens
             )
         }
     }
@@ -702,6 +704,8 @@ class ClaudeDataReader {
                 cacheRead: cacheRead,
                 cacheCreate: cacheCreate
             )
+            // 新消息时累加 context tokens
+            accumulator.contextTokens += input
         }
 
         if let content = message["content"] as? [[String: Any]] {

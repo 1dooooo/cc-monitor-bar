@@ -37,6 +37,7 @@ struct SessionUsage {
     let models: [String: Int64]  // model → total tokens
     let modelBreakdowns: [String: ModelTokenBreakdown]  // model → breakdown
     let toolCounts: [String: Int]  // tool name → call count
+    let contextTokens: Int64  // 累计 context 使用量 (assistant input_tokens 累加)
 
     var totalTokens: Int64 {
         inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens
@@ -51,7 +52,8 @@ struct SessionUsage {
         toolCallCount: Int,
         models: [String: Int64],
         modelBreakdowns: [String: ModelTokenBreakdown] = [:],
-        toolCounts: [String: Int] = [:]
+        toolCounts: [String: Int] = [:],
+        contextTokens: Int64 = 0
     ) {
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
@@ -62,11 +64,12 @@ struct SessionUsage {
         self.models = models
         self.modelBreakdowns = modelBreakdowns
         self.toolCounts = toolCounts
+        self.contextTokens = contextTokens
     }
 
     static let zero = SessionUsage(
         inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0,
-        messageCount: 0, toolCallCount: 0, models: [:], modelBreakdowns: [:], toolCounts: [:]
+        messageCount: 0, toolCallCount: 0, models: [:], modelBreakdowns: [:], toolCounts: [:], contextTokens: 0
     )
 
     func merging(_ other: SessionUsage) -> SessionUsage {
@@ -95,7 +98,8 @@ struct SessionUsage {
             toolCallCount: toolCallCount + other.toolCallCount,
             models: mergedModels,
             modelBreakdowns: mergedModelBreakdowns,
-            toolCounts: mergedToolCounts
+            toolCounts: mergedToolCounts,
+            contextTokens: contextTokens + other.contextTokens
         )
     }
 }
