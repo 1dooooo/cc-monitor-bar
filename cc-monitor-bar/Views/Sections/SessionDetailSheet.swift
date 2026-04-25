@@ -24,7 +24,7 @@ struct SessionDetailSheet: View {
                             Text("Context Window")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            ContextProgressBar(contextTokens: usage.contextTokens)
+                            ContextLabel(contextTokens: usage.contextTokens)
                         }
                         .padding(DesignTokens.spacingSM)
                         .background(Color.secondary.opacity(0.04))

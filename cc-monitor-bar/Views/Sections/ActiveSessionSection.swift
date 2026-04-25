@@ -96,9 +96,9 @@ struct SessionCard: View {
                 }
             }
 
-            // Context Window 进度条
+            // Context Window 累计使用量
             if let usage = usage, usage.contextTokens > 0 {
-                ContextProgressBar(contextTokens: usage.contextTokens)
+                ContextLabel(contextTokens: usage.contextTokens)
             }
         }
         .padding(DesignTokens.spacingSM)
@@ -112,40 +112,21 @@ struct SessionCard: View {
     }
 }
 
-/// Context Window 使用量进度条
+/// Context Window 累计使用量
 ///
-/// 颜色阈值: 🟢 < 60% / 🟡 60-85% / 🔴 > 85%
-struct ContextProgressBar: View {
+/// 显示累计值（多次消息的 input tokens 累加），不显示百分比
+/// 因为 contextTokens 是累计值而非当前窗口大小
+struct ContextLabel: View {
     let contextTokens: Int64
-    private let contextLimit: Int64 = 200_000  // 默认 Claude 200K context
-
-    private var ratio: Double {
-        Double(contextTokens) / Double(contextLimit)
-    }
-
-    private var percentage: Int {
-        min(Int(ratio * 100), 999)
-    }
-
-    private var barColor: Color {
-        if ratio < 0.6 { return .green }
-        if ratio < 0.85 { return .orange }
-        return .red
-    }
 
     var body: some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 6) {
-                Text("Context")
-                    .font(.system(size: 8))
-                    .foregroundColor(.secondary)
-                ProgressView(value: min(ratio, 1.0))
-                    .progressViewStyle(LinearProgressViewStyle(tint: barColor))
-                    .scaleEffect(x: 1, y: 0.6, anchor: .center)
-                Text("\(percentage)%")
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .foregroundColor(barColor)
-            }
+        HStack(spacing: 4) {
+            Text("Context")
+                .font(.system(size: 8))
+                .foregroundColor(.secondary)
+            Text(contextTokens.formattedTokens)
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .foregroundColor(.secondary)
         }
         .padding(.top, 2)
     }
