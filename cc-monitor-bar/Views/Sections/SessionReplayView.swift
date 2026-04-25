@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 会话统计摘要 — 展示来自 SQLite 的真实数据
 struct SessionReplayView: View {
-    let session: SessionRecord
+    let session: Session
 
     var body: some View {
         NavigationStack {
@@ -19,13 +19,13 @@ struct SessionReplayView: View {
 
 /// 会话详情信息
 struct SessionDetailInfo: View {
-    let session: SessionRecord
+    let session: Session
 
     var body: some View {
         VStack(spacing: DesignTokens.spacingSM) {
             InfoRow(label: "ID", value: String(session.id.prefix(8)))
             InfoRow(label: "项目", value: session.projectPath)
-            InfoRow(label: "运行时间", value: session.durationFormatted())
+            InfoRow(label: "运行时间", value: session.durationFormatted)
             InfoRow(label: "消息数", value: "\(session.messageCount)")
             InfoRow(label: "工具调用", value: "\(session.toolCallCount)")
             InfoRow(label: "总 Token", value: session.totalTokens.formattedTokens)
@@ -36,7 +36,7 @@ struct SessionDetailInfo: View {
 
 #Preview {
     SessionReplayView(
-        session: SessionRecord(
+        session: Session(
             id: "abc123", pid: 12345, projectPath: "/Users/ido/project",
             projectId: "my-project", startedAt: Date().addingTimeInterval(-3600),
             endedAt: Date(), durationMs: 3600000,

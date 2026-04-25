@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 使用量热力图 — 按日期展示 Token 使用强度
 struct UsageHeatmapView: View {
-    @State private var dailyStats: [DailyStatsRecord] = []
+    @State private var dailyStats: [DailyStats] = []
     @State private var isLoaded = false
 
     private var maxTokens: Int64 {
@@ -50,7 +50,7 @@ struct UsageHeatmapView: View {
 
 /// 热力图网格 — 按日期展示 Token 使用强度
 struct HeatmapGrid: View {
-    let stats: [DailyStatsRecord]
+    let stats: [DailyStats]
     let maxTokens: Int64
 
     private var groupedByMonth: [(month: String, days: [(date: String, tokens: Int64)])] {

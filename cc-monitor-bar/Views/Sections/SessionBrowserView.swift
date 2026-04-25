@@ -2,8 +2,8 @@ import SwiftUI
 
 /// 会话浏览器 — 基于 SQLite 持久化数据浏览历史会话
 struct SessionBrowserView: View {
-    @State private var sessions: [SessionRecord] = []
-    @State private var selectedSession: SessionRecord?
+    @State private var sessions: [Session] = []
+    @State private var selectedSession: Session?
     @State private var filterProject: String = "all"
     @State private var sortBy: SortOption = .recent
     @State private var isLoaded = false
@@ -14,7 +14,7 @@ struct SessionBrowserView: View {
         case messages = "消息数"
     }
 
-    var filteredSessions: [SessionRecord] {
+    var filteredSessions: [Session] {
         var result = sessions
         if filterProject != "all" {
             result = result.filter { $0.projectId == filterProject }
@@ -90,7 +90,7 @@ struct SessionBrowserView: View {
 }
 
 struct SessionBrowserRow: View {
-    let session: SessionRecord
+    let session: Session
 
     var body: some View {
         HStack(spacing: DesignTokens.spacingSM) {
@@ -130,17 +130,6 @@ struct SessionBrowserRow: View {
     }
 }
 
-extension SessionRecord {
-    var totalTokens: Int64 { inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens }
-
-    func durationFormatted() -> String {
-        let seconds = durationMs / 1000
-        if seconds >= 3600 {
-            return "\(seconds / 3600)h \(seconds % 3600 / 60)m"
-        }
-        return "\(seconds / 60)m"
-    }
-}
 
 #Preview {
     SessionBrowserView()

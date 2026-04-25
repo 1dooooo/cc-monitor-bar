@@ -2,6 +2,7 @@ import Foundation
 
 struct DailyStats: Identifiable, Codable {
     let date: String
+    let projectId: String  // 用于项目级聚合查询
     let messageCount: Int
     let sessionCount: Int
     let toolCallCount: Int
@@ -9,10 +10,27 @@ struct DailyStats: Identifiable, Codable {
     let outputTokens: Int64
     let cacheTokens: Int64
 
-    var id: String { date }
+    var id: String { "\(date)-\(projectId)" }
 
     var totalTokens: Int64 {
         inputTokens + outputTokens + cacheTokens
+    }
+
+    /// 有 project 的场景（项目级聚合查询）
+    init(date: String, projectId: String, messageCount: Int, sessionCount: Int, toolCallCount: Int, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64) {
+        self.date = date
+        self.projectId = projectId
+        self.messageCount = messageCount
+        self.sessionCount = sessionCount
+        self.toolCallCount = toolCallCount
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
+        self.cacheTokens = cacheTokens
+    }
+
+    /// 无 project 的场景 — 默认 "_global"
+    init(date: String, messageCount: Int, sessionCount: Int, toolCallCount: Int, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64) {
+        self.init(date: date, projectId: "_global", messageCount: messageCount, sessionCount: sessionCount, toolCallCount: toolCallCount, inputTokens: inputTokens, outputTokens: outputTokens, cacheTokens: cacheTokens)
     }
 
     var formattedDate: String {
