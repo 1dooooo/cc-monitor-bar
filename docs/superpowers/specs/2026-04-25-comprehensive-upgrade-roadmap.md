@@ -17,6 +17,13 @@
 | P8 | 无 hooks 支持 — 纯轮询，无法捕获实时事件（tool_use 级别） | 低 | — |
 | P9 | 周数据 token 分解依赖 `modelRatios` 近似分摊，不精确 | 中 | `AppState.swift:last7Days` |
 | P10 | 缺少 cost 估算 — 无定价表，无 USD 成本展示 | 低 | — |
+| P11 | 无 burn rate（消耗速率）指标 — 不知道当前消耗多快 | 高 | — |
+| P12 | 无 Context Window 追踪 — 不知道是否接近 200K 极限 | 高 | `ModelUsage.contextWindow` 存在但未使用 |
+| P13 | 无通知/告警系统 — 异常消耗、预算超支、会话卡住都不感知 | 中 | — |
+| P14 | 无项目级聚合 — 各项目的成本/用量趋势对比缺失 | 中 | — |
+| P15 | Subagent 只合并不独立观测 — 无法理解 subagent 成本占比 | 中 | — |
+| P16 | 无会话回放 — 只能看统计，无法按时间顺序重放对话 | 低 | — |
+| P17 | 无订阅方案感知 — 不知道相对于 Pro/Team 限额的使用率 | 低 | — |
 
 ## 二、竞品关键模式映射
 
@@ -57,6 +64,35 @@ Phase 3: 实时可观测 (Real-time)        ← 再搞实时
 Phase 4: 模块化 UI (Modular UI)        ← 再搞好看
 Phase 5: 深度分析 (Deep Analysis)      ← 高阶功能
 ```
+
+### 新增能力速查
+
+| 能力 | 阶段 | 竞品来源 | 对应问题 |
+|------|------|---------|---------|
+| 消除工具调用伪造 | 1.1 | phuryn/ccusage | P1 |
+| message_id 精确去重 | 1.2 | ccusage/tokscale | P1 |
+| 数据质量可解释 | 1.3 | anjor/observagent | P4 |
+| **Burn Rate 一级指标** | **1.4** | **cctray/Claude-Tracker** | **P11** |
+| **Context Window 追踪** | **1.5** | **anjor** | **P12** |
+| **项目级聚合** | **1.6** | **specter/kmizzi** | **P14** |
+| 增量索引持久化 | 2.1 | phuryn/claude-usage | P2, P3 |
+| 会话记录持久化 | 2.2 | phuryn/observagent | P3 |
+| 多频率轮询 | 2.3 | exelban/stats/cctray | P5 |
+| 增量扫描优化 | 2.4 | phuryn/claude-usage | P9 |
+| Hooks 集成 | 3.1 | observagent/anjor | P8 |
+| 会话时间线 | 3.2 | observagent/anjor | — |
+| 轮询降级 | 3.3 | exelban/stats/cctray | P5 |
+| **通知/告警系统** | **3.4** | **cctray/gitify** | **P13** |
+| **Subagent 独立观测** | **3.5** | **observagent/anjor** | **P15** |
+| **订阅方案感知** | **3.6** | **cctray** | **P17** |
+| 可开关面板 | 4.1 | exelban/stats | P7 |
+| 动态图标 | 4.2 | cctray | P6 |
+| 信息密度模式 | 4.3 | Claude-Tracker | P7 |
+| 会话浏览 | 5.1 | kmizzi | — |
+| **会话回放** | **5.2** | **kmizzi** | **P16** |
+| 贡献热力图 | 5.3 | tokscale | — |
+| Cost 估算 | 5.4 | ccusage/tokscale/cctray | P10 |
+| 模型迁移分析 | 5.5 | tokscale | — |
 
 ---
 
@@ -124,6 +160,59 @@ Phase 5: 深度分析 (Deep Analysis)      ← 高阶功能
 - 消除 `modelRatios` 近似分摊（只在无 JSONL 数据时回退到 stats-cache 的精确值）
 
 **涉及文件**: `AppState.swift`, `Database/Repository.swift`
+
+### 1.4 Burn Rate（消耗速率）作为一级指标
+
+**当前**: 无任何 burn rate 展示。用户无法感知"当前消耗多快"，这是 cctray 和 Claude-Usage-Tracker 的核心价值。
+
+**改动**:
+
+- 计算实时 burn rate：
+  - `tokens/min` — 最近 5 分钟的 token 消耗速率
+  - `messages/min` — 最近 5 分钟的消息速率
+  - 如有 cost 数据：`$/min`
+  - `remaining_time` — 基于当前速率，距今日预估上限的剩余时间
+- 新增 `BurnRateSection` 放在 Token 摘要下方，展示为紧凑数字卡片
+- 颜色编码：绿（< 300 tokens/min）、黄（300-700）、红（> 700）
+- 菜单栏图标同步使用此 burn rate 做颜色编码（Phase 4.2）
+
+**涉及文件**: 新建 `Services/BurnRateTracker.swift`，新建 `Views/Sections/BurnRateSection.swift`
+
+**参考**: goniszewski/cctray（burn rate + remaining time），Claude-Usage-Tracker（6 级 pace 系统）
+
+### 1.5 Context Window 追踪
+
+**当前**: `ModelUsage.contextWindow` 字段存在于数据模型但未使用。用户不知道当前会话的上下文窗口剩余多少。
+
+**改动**:
+
+- 从会话 JSONL 解析时追踪累计的 context window 使用量：
+  - `input_tokens` + `output_tokens` + `cache_tokens` = 单次请求的 context 消耗
+  - 对活跃会话累计所有请求，计算已用 context 百分比
+- 展示在活跃会话卡片上：`Context: 142K/200K (71%)`
+- 超过 80% 时警告（黄色），超过 95% 时严重警告（红色）
+- 子代理的 context 单独追踪
+
+**涉及文件**: `ClaudeDataReader.swift`（context 追踪），`ActiveSessionSection.swift`（展示）
+
+**参考**: anjor-labs/anjor（context window observability），observagent（subagent context tracking）
+
+### 1.6 项目级聚合
+
+**当前**: 数据聚合只有"全局"和"单会话"两个维度，缺少项目视角。
+
+**改动**:
+
+- 按项目（cwd）聚合今日和历史的 Token/Cost/Session 数据
+- 新增 `ProjectSummary` 视图：
+  - 项目列表 + 每个项目的今日用量
+  - 点击展开项目详情（模型分布、趋势、历史会话）
+  - 项目间对比（按 Token 或 Cost 排序）
+- 持久化到 SQLite `daily_stats` 表时增加 `project_id` 字段
+
+**涉及文件**: `ClaudeDataReader.swift`（按项目过滤），新建 `Views/Sections/ProjectSummarySection.swift`，修改 `Database/Schema.swift`
+
+**参考**: kmizzi/claude-code-sessions（按项目筛选），specter（multi-project dashboard）
 
 ---
 
@@ -269,6 +358,58 @@ Phase 5: 深度分析 (Deep Analysis)      ← 高阶功能
 
 **涉及文件**: `DataPoller.swift`
 
+### 3.4 通知/告警系统
+
+**当前**: 完全无告警机制。用户需要主动打开菜单栏才能看到信息。
+
+**改动**:
+
+- 新增 `NotificationManager`，基于 `UNUserNotificationCenter`：
+  - **预算告警**：当日 cost 超过阈值时通知（可配置：¥50 / ¥100 / ¥500）
+  - **异常消耗**：1 小时内的 Token 消耗是日常均值的 3 倍以上
+  - **会话卡住**：活跃会话超过 30 分钟但 token 增长为 0
+  - **模型切换**：当前会话模型从高 cost 模型（Opus）切换到低 cost 模型（Haiku）时提示
+- 告警规则可在 Preferences 中配置（开/关 + 阈值）
+- macOS 原生通知，支持 Action（"查看详情" / "忽略"）
+
+**涉及文件**: 新建 `Services/NotificationManager.swift`，修改 `Preferences` 窗口
+
+**参考**: goniszewski/cctray（NotificationManager），gitify-app/gitify（通知设计范式）
+
+### 3.5 Subagent 独立可观测
+
+**当前**: Subagent 数据直接合并到父会话，无法区分 subagent 和主会话的成本占比。
+
+**改动**:
+
+- 解析时区分主会话和 subagent 的数据
+- 会话详情页增加 subagent 折叠面板：
+  - 每个 subagent 的名称/ID、启动时间、token 用量、工具调用数
+  - subagent 的 cost 占父会话的比例（饼图）
+  - subagent 的 tool_use 分布
+- 持久化 subagent 统计到 SQLite（新增 `subagent_stats` 表）
+
+**涉及文件**: 新建 `Database/Schema.swift`（subagent_stats 表），修改 `ClaudeDataReader.swift`（subagent 数据分离），修改 `SessionDetailSheet.swift`
+
+**参考**: darshannere/observagent（subagent observability），anjor-labs/anjor（subagent cost breakdown）
+
+### 3.6 订阅/计费方案感知
+
+**当前**: 无任何方案/限额感知。
+
+**改动**:
+
+- 新增 `BillingPlanManager`：
+  - 用户选择当前 Claude Code tier（Pro/Team/Enterprise）
+  - 内嵌各 tier 的 rate limit 和上下文窗口上限
+  - 展示"已用 / 限额"比例条（类似 cctray 的 billing plan 面板）
+  - 接近限额时触发 Phase 3.4 的告警
+- 注意：Claude Code 的 Pro tier 没有固定 rate limit，但有 soft cap。Team/Enterprise 有明确的 monthly token cap。
+
+**涉及文件**: 新建 `Services/BillingPlanManager.swift`，修改 `TokenSummarySection.swift`
+
+**参考**: goniszewski/cctray（BillingPlanManager），Claude-Usage-Tracker（multi-tier rate limits）
+
 ---
 
 ## Phase 4: 模块化 UI (Modular UI)
@@ -344,6 +485,26 @@ Phase 5: 深度分析 (Deep Analysis)      ← 高阶功能
 **涉及文件**: 新建 `SessionBrowserView.swift`，`Database/Repository.swift`（会话查询），修改 `MonitorView.swift`（添加导航）
 
 **参考**: kmizzi/claude-code-sessions（检索/筛选/回放）
+
+### 5.2 会话回放
+
+**目标**: 按时间顺序逐步重放历史会话的对话过程，不只是看统计，而是"回到对话中"。
+
+**改动**:
+
+- 从 JSONL 转录文件构建对话时间线
+- 支持逐步回放（播放/暂停/步进）
+- 每条消息展示：
+  - 用户消息（纯文本）
+  - AI 回复（含工具调用、思考过程）
+  - Token 用量标注
+  - 时间戳
+- 支持搜索定位（关键词跳转到对应消息）
+- 高亮显示异常点（高 cost 消息、错误、长时间停顿）
+
+**涉及文件**: 新建 `Views/Sections/SessionReplayView.swift`，从 JSONL 直接读取（不经 SQLite）
+
+**参考**: kmizzi/claude-code-sessions（replay capability）
 
 ### 5.2 贡献热力图
 
@@ -421,6 +582,19 @@ CREATE TABLE IF NOT EXISTS tool_call_details (
 );
 CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_call_details(session_id);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_name ON tool_call_details(tool_name);
+
+-- 子代理统计（Phase 3.5）
+CREATE TABLE IF NOT EXISTS subagent_stats (
+    id TEXT PRIMARY KEY,
+    parent_session_id TEXT NOT NULL,
+    name TEXT,
+    started_at REAL NOT NULL,
+    ended_at REAL,
+    total_tokens INTEGER NOT NULL DEFAULT 0,
+    tool_call_count INTEGER NOT NULL DEFAULT 0,
+    message_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_subagent_parent ON subagent_stats(parent_session_id);
 ```
 
 ### 已有但未使用的表（保持现有 Schema）
@@ -457,20 +631,25 @@ Preferences (可定制模块)
 │   ├── 图标颜色编码 (开/关)
 │   ├── 轮播显示 (开/关)
 │   └── 轮播间隔 (秒)
-├── 面板模块
-│   ├── Token 摘要 [√]
-│   ├── 趋势图 [√]
-│   ├── 模型分解 [√]
-│   ├── 活跃会话 [√]
-│   ├── 历史会话 [ ]
-│   ├── 工具调用 [√]
-│   ├── 数据质量诊断 [√]
-│   ├── 贡献热力图 [ ]
-│   ├── 成本估算 [ ]
-│   └── 会话浏览器 [ ]
-└── 信息密度
-    ├── 紧凑 / 标准 / 详细
-    └── 刷新频率预设
+├── 告警设置
+│   ├── 预算阈值 (¥)
+│   ├── 异常消耗检测 (开/关)
+│   ├── 会话卡住检测 (开/关)
+│   └── 通知权限引导
+└── 面板模块
+    ├── Token 摘要 [√]
+    ├── **Burn Rate 卡片** [√]  ← 新增
+    ├── 趋势图 [√]
+    ├── 模型分解 [√]
+    ├── 活跃会话 (含 Context Window) [√]
+    ├── **Subagent 详情** [√]  ← 新增
+    ├── 历史会话 [ ]
+    ├── 工具调用 [√]
+    ├── 数据质量诊断 [√]
+    ├── **项目聚合** [√]  ← 新增
+    ├── 贡献热力图 [ ]
+    ├── 成本估算 [ ]
+    └── 会话浏览器/回放 [ ]
 ```
 
 ### 设计参考
@@ -478,11 +657,15 @@ Preferences (可定制模块)
 | 模块 | 视觉参考 | 关键设计要素 |
 |------|---------|------------|
 | Token 摘要 | cctray | 颜色编码 + 简洁数字 |
+| **Burn Rate** | **cctray** | **实时数字 + pace 颜色 + 剩余时间** |
 | 趋势图 | tokscale | 堆叠柱状 + Token 分解 |
 | 工具调用 | observagent | 实时时间线 + 工具名标签 |
 | 数据质量 | anjor | 可展开诊断面板 |
+| **Context Window** | **anjor** | **进度条 + 阈值颜色** |
+| **Subagent 面板** | **observagent** | **折叠面板 + 成本占比饼图** |
 | 贡献图 | tokscale | GitHub-style 热力图 |
 | 会话浏览器 | kmizzi | 搜索 + 筛选 + 列表 |
+| **会话回放** | **kmizzi** | **逐步播放 + 对话流 + 高亮异常** |
 
 ---
 
@@ -491,22 +674,22 @@ Preferences (可定制模块)
 ### 推荐顺序
 
 ```
-Phase 1 (数据可信) → 必须先做，否则所有 UI 展示的都是不可信数据
+Phase 1 (数据可信 + 核心指标) → 必须先做：消除假数据 + 建立 burn rate + context window 展示
 Phase 2 (持久性能) → 解决重启丢失和轮询开销，为后续 hooks 打基础
-Phase 4 (模块化 UI) → 用户体验提升最直观
-Phase 3 (实时可观测) → 依赖 Phase 2 的基础设施
-Phase 5 (深度分析) → 锦上添花，随时可以加
+Phase 3 (实时可观测 + 告警) → 通知系统、subagent 独立追踪、hooks 实时事件
+Phase 4 (模块化 UI) → 用户体验提升最直观，用户可定制面板
+Phase 5 (深度分析) → 会话回放、热力图、成本分析，锦上添花
 ```
 
 ### 每 Phase 的独立价值
 
 | Phase | 独立价值 | 依赖 |
 |-------|---------|------|
-| Phase 1 | 消除所有假数据，统计口径精确化 | 无 |
-| Phase 2 | 重启后增量生效，冷启动性能 5-10x | Phase 1（工具调用持久化） |
-| Phase 3 | 实时 tool_use 级别追踪，< 1s 延迟 | Phase 2（事件流基础设施） |
-| Phase 4 | 用户可定制面板，信息密度可控 | 无（但 Phase 1 的数据是前提） |
-| Phase 5 | 历史洞察 + 成本分析 | Phase 2（SQLite 持久化） |
+| Phase 1 | 消除所有假数据 + burn rate/context window 一级指标 + 项目级聚合 | 无 |
+| Phase 2 | 重启后增量生效，冷启动性能 5-10x | Phase 1 |
+| Phase 3 | 实时追踪 + 告警推送 + subagent 独立可观测 | Phase 2（持久化基础） |
+| Phase 4 | 用户可定制面板 + 动态图标 + 密度模式 | Phase 1（数据是前提） |
+| Phase 5 | 历史洞察 + 成本分析 + 会话回放 | Phase 2（SQLite 持久化） |
 
 ---
 
@@ -518,6 +701,9 @@ Phase 5 (深度分析) → 锦上添花，随时可以加
 2. **SQLite 并发读写** — `ClaudeDataReader` 和 `AppState` 可能同时写入，需要 WAL 模式
 3. **JSONL 文件数量增长** — 长期运行后 `processed_files` 表可能很大，需要定期清理
 4. **内存 vs SQLite 索引一致性** — 双重索引（内存 + SQLite）需要保持同步
+5. **通知权限** — macOS 需要用户授权 `UNUserNotificationCenter` 权限，首次启动需引导
+6. **Context Window 估算误差** — Claude Code 的实际 context 使用量可能与 JSONL 中的 token 统计有偏差（系统消息、thinking 等未计入的部分）
+7. **Burn Rate 波动** — 短时间内的高频请求会导致 burn rate 虚高，需要滑动窗口平滑（推荐 5 分钟 EMA）
 
 ### 设计决策注意事项
 
@@ -525,3 +711,5 @@ Phase 5 (深度分析) → 锦上添花，随时可以加
 2. **不替换 stats-cache** — 它是 Claude Code 官方产物，我们只读取不写入
 3. **hooks 是可选的** — 即使 hooks 不可用，轮询回退方案必须完整可用
 4. **保持 SQLite 包引用** — 继续使用 SQLite.swift，不引入新依赖
+5. **SQLite 是本地缓存** — 强调所有数据仅存储在本地，不上传、不遥测，与 Specter 的"纯本地"定位一致
+6. **订阅方案感知是可选的** — 用户可选择不关联方案，基础功能不受影响
