@@ -274,11 +274,14 @@ class AppState: ObservableObject {
                     let projectId = self.resolver.resolveProjectId(from: project)
                     let startedAt = Date(timeIntervalSince1970: Double(entry.timestamp) / 1000.0)
                     let usage = self.reader.readSessionUsage(cwd: project, sessionId: sid)
-                    let durationMs = max(Int64(Date().timeIntervalSince(startedAt) * 1000), 1)
-                    // 有实际用量数据 → 用实际时间范围标记已结束
-                    let endedAt: Date? = usage.totalTokens > 0
-                        ? startedAt.addingTimeInterval(max(Double(durationMs) / 1000.0, 1))
-                        : nil
+                    // endedAt: JSONL 最后消息时间戳；无数据时 fallback 到 startedAt
+                    let endedAt: Date? = usage.lastMessageTimestamp ?? startedAt
+                    let durationSec: TimeInterval = if let ended = endedAt {
+                        max(ended.timeIntervalSince(startedAt), 1)
+                    } else {
+                        Date().timeIntervalSince(startedAt)
+                    }
+                    let durationMs = Int64(durationSec * 1000)
                     history.append(Session(
                         id: sid, pid: 0, projectPath: project, projectId: projectId,
                         startedAt: startedAt, endedAt: endedAt,

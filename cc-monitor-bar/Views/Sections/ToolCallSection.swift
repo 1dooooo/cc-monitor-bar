@@ -11,12 +11,14 @@ struct ToolCallSection: View {
                 Text("工具调用")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Text("共 \(toolCallCount.formattedTokens) 次")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if toolCallCount > 0 {
+                    Text("共 \(toolCallCount.formattedTokens) 次")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
 
-            if topTools.isEmpty {
+            if toolCallCount == 0 || topTools.isEmpty {
                 Text("暂无数据")
                     .font(.caption)
                     .foregroundColor(.secondary)

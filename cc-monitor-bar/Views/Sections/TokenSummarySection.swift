@@ -23,9 +23,15 @@ struct TokenSummarySection: View {
             }
 
             HStack(spacing: DesignTokens.spacingLG) {
-                TokenDetailRow(label: "↑ 输入", value: stats?.inputTokens ?? 0, color: .blue)
-                TokenDetailRow(label: "↓ 输出", value: stats?.outputTokens ?? 0, color: .green)
-                TokenDetailRow(label: "⟳ 缓存", value: stats?.cacheTokens ?? 0, color: .teal)
+                if let stats {
+                    TokenDetailRow(label: "↑ 输入", value: stats.inputTokens, color: .blue)
+                    TokenDetailRow(label: "↓ 输出", value: stats.outputTokens, color: .green)
+                    TokenDetailRow(label: "⟳ 缓存", value: stats.cacheTokens, color: .teal)
+                } else {
+                    TokenDetailPlaceholder()
+                    TokenDetailPlaceholder()
+                    TokenDetailPlaceholder()
+                }
             }
 
             if let qualityStatus = qualityStatus {
@@ -167,6 +173,17 @@ struct TokenDetailRow: View {
             Text(value.formattedTokens)
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
                 .foregroundColor(color)
+        }
+    }
+}
+
+/// Token 占位符 — 无数据时显示 "--"
+struct TokenDetailPlaceholder: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            Text("--")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.5))
         }
     }
 }

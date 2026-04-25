@@ -38,6 +38,7 @@ struct SessionUsage {
     let modelBreakdowns: [String: ModelTokenBreakdown]  // model → breakdown
     let toolCounts: [String: Int]  // tool name → call count
     let contextTokens: Int64  // 累计 context 使用量 (assistant input_tokens 累加)
+    let lastMessageTimestamp: Date?  // JSONL 中最后一条消息的时间戳
 
     var totalTokens: Int64 {
         inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens
@@ -53,7 +54,8 @@ struct SessionUsage {
         models: [String: Int64],
         modelBreakdowns: [String: ModelTokenBreakdown] = [:],
         toolCounts: [String: Int] = [:],
-        contextTokens: Int64 = 0
+        contextTokens: Int64 = 0,
+        lastMessageTimestamp: Date? = nil
     ) {
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
@@ -65,11 +67,13 @@ struct SessionUsage {
         self.modelBreakdowns = modelBreakdowns
         self.toolCounts = toolCounts
         self.contextTokens = contextTokens
+        self.lastMessageTimestamp = lastMessageTimestamp
     }
 
     static let zero = SessionUsage(
         inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0,
-        messageCount: 0, toolCallCount: 0, models: [:], modelBreakdowns: [:], toolCounts: [:], contextTokens: 0
+        messageCount: 0, toolCallCount: 0, models: [:], modelBreakdowns: [:], toolCounts: [:],
+        contextTokens: 0, lastMessageTimestamp: nil
     )
 
     func merging(_ other: SessionUsage) -> SessionUsage {
@@ -99,7 +103,9 @@ struct SessionUsage {
             models: mergedModels,
             modelBreakdowns: mergedModelBreakdowns,
             toolCounts: mergedToolCounts,
-            contextTokens: contextTokens + other.contextTokens
+            contextTokens: contextTokens + other.contextTokens,
+            lastMessageTimestamp: [lastMessageTimestamp, other.lastMessageTimestamp]
+                .compactMap { $0 }.max()
         )
     }
 }

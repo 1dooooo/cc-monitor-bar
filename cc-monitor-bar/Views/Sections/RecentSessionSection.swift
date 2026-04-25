@@ -44,8 +44,14 @@ struct SessionRow: View {
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.green)
             }
-            Text((usage?.totalTokens ?? 0).formattedTokens)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            if let usage = usage {
+                Text(usage.totalTokens.formattedTokens)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            } else {
+                Text("--")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.5))
+            }
         }
         .padding(.vertical, DesignTokens.spacingSM)
     }

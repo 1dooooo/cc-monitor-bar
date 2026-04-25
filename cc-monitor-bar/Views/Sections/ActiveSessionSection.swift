@@ -61,21 +61,39 @@ struct SessionCard: View {
                     Text("↑")
                         .font(.system(size: 9))
                         .foregroundColor(.blue)
-                    Text((usage?.inputTokens ?? 0).formattedTokens)
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.blue)
+                    if let usage {
+                        Text(usage.inputTokens.formattedTokens)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.blue)
+                    } else {
+                        Text("--")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.5))
+                    }
                 }
                 HStack(spacing: 4) {
                     Text("↓")
                         .font(.system(size: 9))
                         .foregroundColor(.green)
-                    Text((usage?.outputTokens ?? 0).formattedTokens)
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.green)
+                    if let usage {
+                        Text(usage.outputTokens.formattedTokens)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.green)
+                    } else {
+                        Text("--")
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.secondary.opacity(0.5))
+                    }
                 }
                 Spacer()
-                Text((usage?.totalTokens ?? 0).formattedTokens)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                if let usage {
+                    Text(usage.totalTokens.formattedTokens)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                } else {
+                    Text("--")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
             }
 
             // Context Window 进度条

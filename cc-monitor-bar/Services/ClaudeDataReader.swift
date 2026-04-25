@@ -561,6 +561,7 @@ class ClaudeDataReader {
         var toolCounts: [String: Int] = [:]
         var contextTokens: Int64 = 0  // 累计 context 使用量
         var messages: [String: IndexedMessageUsage] = [:]
+        var lastMessageTimestamp: Date?  // 最后一条消息的时间戳
 
         /// 返回所有去重键 (tool_use.id 或匿名指纹)
         func dedupKeys() -> [String] {
@@ -607,7 +608,8 @@ class ClaudeDataReader {
                 models: modelTokens,
                 modelBreakdowns: modelBreakdowns,
                 toolCounts: toolCounts,
-                contextTokens: contextTokens
+                contextTokens: contextTokens,
+                lastMessageTimestamp: lastMessageTimestamp
             )
         }
     }
@@ -944,8 +946,16 @@ class ClaudeDataReader {
             return
         }
 
+        // 始终解析时间戳以追踪最后消息时间（不受 dateRange 过滤影响）
+        let timestamp = parseTimestamp(from: entry)
+        if let ts = timestamp {
+            if accumulator.lastMessageTimestamp == nil || ts > accumulator.lastMessageTimestamp! {
+                accumulator.lastMessageTimestamp = ts
+            }
+        }
+
         if let dateRange {
-            guard let timestamp = parseTimestamp(from: entry), dateRange.contains(timestamp) else {
+            guard let ts = timestamp, dateRange.contains(ts) else {
                 return
             }
         }
