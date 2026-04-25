@@ -109,9 +109,14 @@ struct ModelRow: View {
     }
 
     private func modelNameDisplay(_ name: String) -> String {
-        if name.lowercased().contains("sonnet") { return "Sonnet" }
-        if name.lowercased().contains("opus") { return "Opus" }
-        if name.lowercased().contains("haiku") { return "Haiku" }
+        let lower = name.lowercased()
+        if lower.contains("sonnet") { return "Sonnet" }
+        if lower.contains("opus") { return "Opus" }
+        if lower.contains("haiku") { return "Haiku" }
+        // Fallback: 移除 "claude-" 前缀，保留简短名称
+        if name.hasPrefix("claude-") {
+            return name.dropFirst(7).capitalized
+        }
         return name
     }
 }
