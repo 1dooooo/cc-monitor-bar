@@ -254,6 +254,36 @@ class ClaudeDataReader {
 
     // MARK: - Today Usage from JSONL
 
+    /// 检查 processed_files 表，如果文件未变更则返回缓存的统计数据
+    /// 用于避免重复解析未修改的文件
+    private func getCachedFileStats(at filePath: String, currentMtime: TimeInterval, currentSize: UInt64) -> SessionUsage? {
+        do {
+            let rows = try db.prepare("SELECT mtime, file_size, offset, message_count, tool_call_count, total_tokens FROM processed_files WHERE path = ?", filePath)
+            for row in rows {
+                let cachedMtime: Double = row[0] as? Double ?? 0
+                let cachedSize: Int64 = row[1] as? Int64 ?? 0
+                let offset: Int64 = row[2] as? Int64 ?? 0
+
+                // 文件未变更且已有解析数据（offset > 0），直接使用缓存
+                if cachedMtime == currentMtime && UInt64(cachedSize) == currentSize && offset > 0 {
+                    let messageCount: Int = row[3] as? Int ?? 0
+                    let toolCallCount: Int = row[4] as? Int ?? 0
+                    let totalTokens: Int64 = row[5] as? Int64 ?? 0
+                    return SessionUsage(
+                        inputTokens: totalTokens, outputTokens: 0,
+                        cacheReadTokens: 0, cacheCreationTokens: 0,
+                        messageCount: messageCount, toolCallCount: toolCallCount,
+                        models: [:], modelBreakdowns: [:], toolCounts: [:],
+                        contextTokens: totalTokens
+                    )
+                }
+            }
+        } catch {
+            // 忽略查询错误
+        }
+        return nil
+    }
+
     /// 从今日会话的 jsonl 文件聚合 token 统计
     func readTodayUsage() -> (
         messageCount: Int,
@@ -305,7 +335,11 @@ class ClaudeDataReader {
                           let modDate = attrs[.modificationDate] as? Date,
                           modDate >= todayStart else { continue }
 
-                    var sessionUsage = parseJsonlUsage(at: filePath, within: todayRange)
+                    let fileSize = attrs[.size] as? Int64 ?? 0
+
+                    // 增量扫描优化：检查 SQLite 缓存，文件未变更时直接读取缓存统计
+                    var sessionUsage = getCachedFileStats(at: filePath, currentMtime: modDate.timeIntervalSince1970, currentSize: UInt64(fileSize))
+                        ?? parseJsonlUsage(at: filePath, within: todayRange)
 
                     // 纳入子代理数据
                     let sessionId = file.replacingOccurrences(of: ".jsonl", with: "")
@@ -420,7 +454,11 @@ class ClaudeDataReader {
                           let modDate = attrs[.modificationDate] as? Date,
                           modDate >= todayStart else { continue }
 
-                    var sessionUsage = parseJsonlUsage(at: filePath, within: todayRange)
+                    let fileSize = attrs[.size] as? Int64 ?? 0
+
+                    // 增量扫描优化：检查 SQLite 缓存，文件未变更时直接读取缓存统计
+                    var sessionUsage = getCachedFileStats(at: filePath, currentMtime: modDate.timeIntervalSince1970, currentSize: UInt64(fileSize))
+                        ?? parseJsonlUsage(at: filePath, within: todayRange)
 
                     let sessionId = file.replacingOccurrences(of: ".jsonl", with: "")
                     let subagentsDir = "\(projectPath)/\(sessionId)/subagents"
@@ -677,7 +715,7 @@ class ClaudeDataReader {
                 let fileSize: Int64 = row[2] as? Int64 ?? 0
                 let offset: Int64 = row[3] as? Int64 ?? 0
                 let messageCount: Int64 = row[4] as? Int64 ?? 0
-                let toolCallCount: Int64 = row[5] as? Int64 ?? 0
+                let _: Int64 = row[5] as? Int64 ?? 0
                 let totalTokens: Int64 = row[6] as? Int64 ?? 0
                 let lastAccessed: Double = row[7] as? Double ?? 0
 
