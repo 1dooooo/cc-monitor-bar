@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 趋势图 — 堆叠柱状图（输入/输出/缓存）
+/// 趋势图 — 单色柱状图（每日 Token 总量）
 struct TrendChartSection: View {
     let weeklyData: [DailyActivity]
     @Binding var period: TrendPeriod
@@ -25,10 +25,10 @@ struct TrendChartSection: View {
                 .frame(width: 60)
             }
 
-            // 堆叠柱状图
+            // 单色柱状图
             HStack(alignment: .bottom, spacing: 4) {
                 ForEach(weeklyData.prefix(7), id: \.date) { day in
-                    if day.inputTokens == nil && day.outputTokens == nil && day.cacheTokens == nil {
+                    if day.totalTokens == 0 {
                         // 无数据的天显示空占位
                         VStack(spacing: 0) {
                             if isToday(day.date) {
@@ -43,13 +43,7 @@ struct TrendChartSection: View {
                                 .cornerRadius(2)
                         }
                     } else {
-                        StackedBarDay(
-                            inputTokens: day.inputTokens ?? 0,
-                            outputTokens: day.outputTokens ?? 0,
-                            cacheTokens: day.cacheTokens ?? 0,
-                            maxValue: maxValue,
-                            isToday: isToday(day.date)
-                        )
+                        SingleBarDay(tokens: day.totalTokens, maxValue: maxValue, isToday: isToday(day.date))
                     }
                 }
             }
@@ -62,13 +56,6 @@ struct TrendChartSection: View {
                         .font(.system(size: 8))
                         .foregroundColor(isToday(day.date) ? .orange : .secondary)
                 }
-            }
-
-            // 图例
-            HStack(spacing: DesignTokens.spacingSM) {
-                LegendItem(color: .blue, label: "输入")
-                LegendItem(color: .green, label: "输出")
-                LegendItem(color: .teal, label: "缓存")
             }
         }
         .padding(DesignTokens.spacingMD)
@@ -95,30 +82,14 @@ struct TrendChartSection: View {
     }
 }
 
-struct StackedBarDay: View {
-    let inputTokens: Int64
-    let outputTokens: Int64
-    let cacheTokens: Int64
+struct SingleBarDay: View {
+    let tokens: Int64
     let maxValue: Int64
     let isToday: Bool
 
-    private var totalTokens: Int64 {
-        inputTokens + outputTokens + cacheTokens
-    }
-
-    private var inputRatio: CGFloat {
-        guard totalTokens > 0 else { return 0 }
-        return CGFloat(inputTokens) / CGFloat(totalTokens)
-    }
-
-    private var outputRatio: CGFloat {
-        guard totalTokens > 0 else { return 0 }
-        return CGFloat(outputTokens) / CGFloat(totalTokens)
-    }
-
-    private var cacheRatio: CGFloat {
-        guard totalTokens > 0 else { return 0 }
-        return CGFloat(cacheTokens) / CGFloat(totalTokens)
+    private var barHeight: CGFloat {
+        guard maxValue > 0 else { return 0 }
+        return CGFloat(tokens) / CGFloat(maxValue) * 50
     }
 
     var body: some View {
@@ -129,40 +100,10 @@ struct StackedBarDay: View {
                     .frame(width: 4, height: 4)
                     .padding(.bottom, 2)
             }
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(Color.teal)
-                    .frame(height: max(barHeight * cacheRatio, 2))
-                Rectangle()
-                    .fill(Color.green)
-                    .frame(height: max(barHeight * outputRatio, 2))
-                Rectangle()
-                    .fill(Color.blue)
-                    .frame(height: max(barHeight * inputRatio, 2))
-            }
-            .cornerRadius(2)
-        }
-    }
-
-    private var barHeight: CGFloat {
-        guard maxValue > 0 else { return 0 }
-        return CGFloat(totalTokens) / CGFloat(maxValue) * 50
-    }
-}
-
-struct LegendItem: View {
-    let color: Color
-    let label: String
-
-    var body: some View {
-        HStack(spacing: 3) {
             Rectangle()
-                .fill(color)
-                .frame(width: 8, height: 3)
-                .cornerRadius(1)
-            Text(label)
-                .font(.system(size: 8))
-                .foregroundColor(.secondary)
+                .fill(Color.blue)
+                .frame(height: max(barHeight, 2))
+                .cornerRadius(2)
         }
     }
 }
