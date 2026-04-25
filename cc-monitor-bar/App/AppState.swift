@@ -77,7 +77,6 @@ class AppState: ObservableObject {
     @Published var todayStats: TodayStats?
     @Published var dataQualityStatus: DataQualityStatus?
     @Published var weeklyData: [DailyActivity] = []
-    @Published var isLoading = false
     @Published var projectSummaries: [ProjectSummary] = []
 
     // MARK: - Burn Rate
@@ -92,8 +91,47 @@ class AppState: ObservableObject {
     let preferences = AppPreferences.shared
     private let reader = ClaudeDataReader()
     private let resolver = ProjectResolver()
-    private var timer: Timer?
+    private var pollingTimers: [PollingDataType: Timer] = [:]
     private var cancellables = Set<AnyCancellable>()
+
+    // MARK: - Per-Type Polling State
+
+    /// 不同数据源的轮询频率（秒）
+    enum PollingDataType: String, CaseIterable {
+        case sessions    // 活跃会话 + 用量：10s
+        case todayStats  // 今日统计：30s
+        case history     // 历史会话：60s
+        case weeklyData  // 周数据：60s
+
+        var defaultInterval: TimeInterval {
+            switch self {
+            case .sessions: return 10
+            case .todayStats: return 30
+            case .history: return 60
+            case .weeklyData: return 60
+            }
+        }
+    }
+
+    private struct PollingState {
+        var elapsed: TimeInterval = 0
+        var interval: TimeInterval
+        var backoffMultiplier: Int = 1  // 指数退避乘数
+
+        mutating func onBackoffReset() {
+            backoffMultiplier = 1
+        }
+
+        mutating func onBackoffIncrease() {
+            backoffMultiplier = min(backoffMultiplier * 2, 60)
+        }
+
+        var effectiveInterval: TimeInterval {
+            min(interval * Double(backoffMultiplier), 60)
+        }
+    }
+
+    private var pollingStates: [PollingDataType: PollingState] = [:]
 
     // MARK: - Init
 
@@ -103,61 +141,73 @@ class AppState: ObservableObject {
     }
 
     deinit {
-        timer?.invalidate()
+        for timer in pollingTimers.values {
+            timer.invalidate()
+        }
     }
 
-    // MARK: - Polling
+    // MARK: - Multi-Frequency Polling
 
     private func startPolling() {
-        scheduleTimer()
+        // 初始化各数据类型的轮询状态
+        for type in PollingDataType.allCases {
+            pollingStates[type] = PollingState(interval: type.defaultInterval)
+        }
+
+        // 立即执行全量加载
         refreshData()
 
-        // 监听刷新间隔变更，重建 Timer
+        // 创建定时器：每 5 秒 tick 一次，按各自间隔调度
+        let timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            self?.tickPolling()
+        }
+        pollingTimers[.sessions] = timer  // 只需一个 tick 定时器
+
+        // 监听刷新间隔变更，重建定时器（兼容旧偏好设置）
         preferences.$refreshInterval
             .dropFirst()
             .sink { [weak self] _ in
-                self?.scheduleTimer()
+                self?.refreshData()  // 偏好变更时触发全量刷新
             }
             .store(in: &cancellables)
     }
 
-    private func scheduleTimer() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: preferences.refreshInterval, repeats: true) { [weak self] _ in
-            self?.refreshData()
+    private func tickPolling() {
+        for type in PollingDataType.allCases {
+            guard var state = pollingStates[type] else { continue }
+            state.elapsed += 5
+
+            if state.elapsed >= state.effectiveInterval {
+                state.elapsed = 0
+                loadDataType(type)
+            }
+
+            pollingStates[type] = state
         }
     }
 
-    // MARK: - Data Loading
+    private func loadDataType(_ type: PollingDataType) {
+        switch type {
+        case .sessions: loadSessions()
+        case .todayStats: loadTodayStats()
+        case .history: loadHistory()
+        case .weeklyData: loadWeeklyData()
+        }
+    }
 
-    func refreshData() {
-        isLoading = true
-
+    private func loadSessions() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-
-            var active: [Session] = []
-            var usages: [String: SessionUsage] = [:]
-            var history: [Session] = []
-            var stats: TodayStats?
-            var qualityStatus: DataQualityStatus?
-            var weeklyData: [DailyActivity] = []
-            var projectSummaries: [ProjectSummary] = []
-
-            // 1. 活跃会话 + per-session usage
             do {
                 let sessionInfos = try self.reader.readActiveSessions()
+                var active: [Session] = []
+                var usages: [String: SessionUsage] = [:]
                 for info in sessionInfos {
                     let projectId = self.resolver.resolveProjectId(from: info.cwd)
-
-                    // 读取该会话的 token 用量
                     let usage = self.reader.readSessionUsage(cwd: info.cwd, sessionId: info.sessionId)
                     usages[info.sessionId] = usage
-
-                    let session = Session(
-                        id: info.sessionId,
-                        pid: info.pid,
-                        projectPath: info.cwd,
+                    active.append(Session(
+                        id: info.sessionId, pid: info.pid, projectPath: info.cwd,
                         projectId: projectId,
                         startedAt: Date(timeIntervalSince1970: Double(info.startedAt) / 1000.0),
                         endedAt: nil,
@@ -165,55 +215,69 @@ class AppState: ObservableObject {
                         messageCount: usage.messageCount,
                         toolCallCount: usage.toolCallCount,
                         entrypoint: info.entrypoint
-                    )
-                    active.append(session)
+                    ))
                 }
+                // 持久化到 SQLite
+                let tuples = active.map { ($0.id, $0.pid, $0.projectPath, $0.projectId, $0.startedAt, $0.messageCount, $0.toolCallCount, $0.entrypoint) }
+                self.reader.persistSessions(tuples, usages: usages)
+                DispatchQueue.main.async {
+                    self.currentSessions = active
+                    self.sessionUsages = usages
+                }
+                self.pollingStates[.sessions]?.onBackoffReset()
             } catch {
                 print("读取活跃会话失败: \(error)")
+                self.pollingStates[.sessions]?.onBackoffIncrease()
             }
+        }
+    }
 
-            // 2. 历史记录
+    private func loadHistory() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
             do {
                 let historyEntries = try self.reader.readHistory(limit: 200)
+                var history: [Session] = []
                 var seenIds = Set<String>()
                 for entry in historyEntries.reversed() {
                     guard let sid = entry.sessionId,
                           let project = entry.project,
                           !seenIds.contains(sid) else { continue }
                     seenIds.insert(sid)
-
                     let projectId = self.resolver.resolveProjectId(from: project)
-                    let session = Session(
-                        id: sid,
-                        pid: 0,
-                        projectPath: project,
-                        projectId: projectId,
+                    history.append(Session(
+                        id: sid, pid: 0, projectPath: project, projectId: projectId,
                         startedAt: Date(timeIntervalSince1970: Double(entry.timestamp) / 1000.0),
                         endedAt: Date(timeIntervalSince1970: Double(entry.timestamp) / 1000.0 + 3600),
                         durationMs: 3600000,
-                        messageCount: 0,
-                        toolCallCount: 0,
-                        entrypoint: "cli"
-                    )
-                    history.append(session)
+                        messageCount: 0, toolCallCount: 0, entrypoint: "cli"
+                    ))
                 }
+                DispatchQueue.main.async { self.historySessions = history }
+                self.pollingStates[.history]?.onBackoffReset()
             } catch {
                 print("读取历史失败: \(error)")
+                self.pollingStates[.history]?.onBackoffIncrease()
             }
+        }
+    }
 
-            // 3. 今日统计（优先实时 JSONL 聚合，stats-cache 兜底/补充）
-            let todayUsage = self.reader.readTodayUsage()
-            var messageCount = todayUsage.messageCount
-            var sessionCount = todayUsage.sessionCount
-            var toolCallCount = todayUsage.toolCallCount
-            var totalTokens = todayUsage.totalTokens
-            var totalInputTokens = todayUsage.inputTokens
-            var totalOutputTokens = todayUsage.outputTokens
-            var totalCacheTokens = todayUsage.cacheTokens
-            var breakdown = todayUsage.modelBreakdown
-            var toolCounts = todayUsage.toolCounts
-
+    private func loadTodayStats() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
             do {
+                let todayUsage = self.reader.readTodayUsage()
+                var messageCount = todayUsage.messageCount
+                var sessionCount = todayUsage.sessionCount
+                var toolCallCount = todayUsage.toolCallCount
+                var totalTokens = todayUsage.totalTokens
+                var totalInputTokens = todayUsage.inputTokens
+                var totalOutputTokens = todayUsage.outputTokens
+                var totalCacheTokens = todayUsage.cacheTokens
+                var breakdown = todayUsage.modelBreakdown
+                let toolCounts = todayUsage.toolCounts
+                var qualityStatus: DataQualityStatus?
+
                 let cache = try self.reader.readStatsCache()
                 let todayStr = Self.todayDateString()
                 let todayActivity = cache.dailyActivity.first { $0.date == todayStr }
@@ -221,12 +285,9 @@ class AppState: ObservableObject {
                 let modelRatios = Self.modelRatios(from: cache.modelUsage)
 
                 qualityStatus = Self.buildDataQualityStatus(
-                    todayUsage: todayUsage,
-                    cache: cache,
-                    todayStr: todayStr
+                    todayUsage: todayUsage, cache: cache, todayStr: todayStr
                 )
 
-                // 今日 message/session/tool 次数：用实时值和缓存值取较大，减少缓存延迟影响
                 let cacheDayForCounts = todayActivity ?? latestDay
                 if let day = cacheDayForCounts {
                     messageCount = max(messageCount, day.messageCount)
@@ -234,7 +295,6 @@ class AppState: ObservableObject {
                     toolCallCount = max(toolCallCount, day.toolCallCount)
                 }
 
-                // 若实时解析暂无 token，再退回 stats-cache 的 dailyModelTokens
                 if totalTokens == 0,
                    let dayTokens = cache.dailyModelTokens.first(where: { $0.date == todayStr }) {
                     for (model, tokens) in dayTokens.tokensByModel {
@@ -255,95 +315,79 @@ class AppState: ObservableObject {
                     }
                 }
 
-                weeklyData = Self.last7Days(
+                breakdown.sort { $0.tokens > $1.tokens }
+                let stats = TodayStats(
+                    messageCount: messageCount, sessionCount: sessionCount,
+                    toolCallCount: toolCallCount, totalTokens: totalTokens,
+                    inputTokens: totalInputTokens, outputTokens: totalOutputTokens,
+                    cacheTokens: totalCacheTokens, modelBreakdown: breakdown,
+                    toolCounts: toolCounts
+                )
+
+                // 持久化
+                self.reader.persistDailyStats(
+                    date: todayStr, projectId: "_global",
+                    messageCount: messageCount, sessionCount: sessionCount,
+                    toolCallCount: toolCallCount, totalTokens: totalTokens,
+                    inputTokens: totalInputTokens, outputTokens: totalOutputTokens,
+                    cacheTokens: totalCacheTokens, modelBreakdown: breakdown
+                )
+
+                // 项目级聚合 + 持久化
+                let projectSummaries = self.reader.readTodayUsageByProject()
+                for project in projectSummaries {
+                    self.reader.persistDailyStats(
+                        date: todayStr, projectId: project.name,
+                        messageCount: project.messageCount, sessionCount: project.sessionCount,
+                        toolCallCount: project.toolCallCount, totalTokens: project.totalTokens,
+                        inputTokens: project.inputTokens, outputTokens: project.outputTokens,
+                        cacheTokens: project.cacheTokens, modelBreakdown: []
+                    )
+                }
+
+                self.burnRateTracker.update(totalTokens: totalTokens)
+
+                DispatchQueue.main.async {
+                    self.todayStats = stats
+                    self.dataQualityStatus = qualityStatus
+                    self.projectSummaries = projectSummaries
+                    self.burnRate = self.burnRateTracker.currentRate
+                    self.burnRateLevel = self.burnRateTracker.rateLevel
+                    self.isBurnRateActive = self.burnRateTracker.isActive
+                }
+                self.pollingStates[.todayStats]?.onBackoffReset()
+            } catch {
+                print("读取今日统计失败: \(error)")
+                self.pollingStates[.todayStats]?.onBackoffIncrease()
+            }
+        }
+    }
+
+    private func loadWeeklyData() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            do {
+                let cache = try self.reader.readStatsCache()
+                let modelRatios = Self.modelRatios(from: cache.modelUsage)
+                let weeklyData = Self.last7Days(
                     from: cache.dailyActivity,
                     dailyModelTokens: cache.dailyModelTokens,
                     modelRatios: modelRatios
                 )
+                DispatchQueue.main.async { self.weeklyData = weeklyData }
+                self.pollingStates[.weeklyData]?.onBackoffReset()
             } catch {
-                print("读取 stats-cache 失败: \(error)")
-                qualityStatus = DataQualityStatus(
-                    level: .unavailable,
-                    summary: "stats-cache 不可用，已仅使用实时 JSONL",
-                    sourceDate: nil,
-                    isCacheStale: false,
-                    tokenDiffRatio: nil,
-                    messageDiffRatio: nil,
-                    sessionDiffRatio: nil,
-                    toolDiffRatio: nil,
-                    diffBreakdown: nil
-                )
-                weeklyData = []
+                print("读取周数据失败: \(error)")
+                self.pollingStates[.weeklyData]?.onBackoffIncrease()
             }
+        }
+    }
 
-            breakdown.sort { $0.tokens > $1.tokens }
-
-            stats = TodayStats(
-                messageCount: messageCount,
-                sessionCount: sessionCount,
-                toolCallCount: toolCallCount,
-                totalTokens: totalTokens,
-                inputTokens: totalInputTokens,
-                outputTokens: totalOutputTokens,
-                cacheTokens: totalCacheTokens,
-                modelBreakdown: breakdown,
-                toolCounts: toolCounts
-            )
-
-            // 持久化会话和 token 用量到 SQLite
-            let sessionTuples = active.map { ($0.id, $0.pid, $0.projectPath, $0.projectId, $0.startedAt, $0.messageCount, $0.toolCallCount, $0.entrypoint) }
-            self.reader.persistSessions(sessionTuples, usages: usages)
-
-            // 持久化每日统计到 SQLite
-            let todayStr2 = Self.todayDateString()
-            self.reader.persistDailyStats(
-                date: todayStr2,
-                projectId: "_global",
-                messageCount: messageCount,
-                sessionCount: sessionCount,
-                toolCallCount: toolCallCount,
-                totalTokens: totalTokens,
-                inputTokens: totalInputTokens,
-                outputTokens: totalOutputTokens,
-                cacheTokens: totalCacheTokens,
-                modelBreakdown: breakdown
-            )
-
-            // 更新 Burn Rate
-            self.burnRateTracker.update(totalTokens: totalTokens)
-
-            // 项目级聚合
-            projectSummaries = self.reader.readTodayUsageByProject()
-
-            // 持久化每个项目的每日统计
-            for project in projectSummaries {
-                self.reader.persistDailyStats(
-                    date: todayStr2,
-                    projectId: project.name,
-                    messageCount: project.messageCount,
-                    sessionCount: project.sessionCount,
-                    toolCallCount: project.toolCallCount,
-                    totalTokens: project.totalTokens,
-                    inputTokens: project.inputTokens,
-                    outputTokens: project.outputTokens,
-                    cacheTokens: project.cacheTokens,
-                    modelBreakdown: []
-                )
-            }
-
-            DispatchQueue.main.async {
-                self.currentSessions = active
-                self.sessionUsages = usages
-                self.historySessions = history
-                self.todayStats = stats
-                self.dataQualityStatus = qualityStatus
-                self.weeklyData = weeklyData
-                self.projectSummaries = projectSummaries
-                self.isLoading = false
-                self.burnRate = self.burnRateTracker.currentRate
-                self.burnRateLevel = self.burnRateTracker.rateLevel
-                self.isBurnRateActive = self.burnRateTracker.isActive
-            }
+    /// 手动全量刷新（覆盖正常间隔立即加载）
+    func refreshData() {
+        for type in PollingDataType.allCases {
+            pollingStates[type]?.elapsed = pollingStates[type]?.effectiveInterval ?? type.defaultInterval
+            loadDataType(type)
         }
     }
 
