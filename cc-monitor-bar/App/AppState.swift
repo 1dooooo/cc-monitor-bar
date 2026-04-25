@@ -15,57 +15,6 @@ struct TodayStats {
     let toolCounts: [String: Int]
 }
 
-enum DataQualityLevel {
-    case healthy
-    case warning
-    case critical
-    case unavailable
-
-    var displayText: String {
-        switch self {
-        case .healthy: return "正常"
-        case .warning: return "偏差"
-        case .critical: return "异常"
-        case .unavailable: return "未知"
-        }
-    }
-}
-
-/// 数据质量校验原因分类
-enum DataQualityReason: String {
-    case normal = "正常"
-    case cacheNotYetUpdated = "cache 延迟"
-    case jsonlMissingUsage = "JSONL 解析遗漏"
-    case dataSourceMismatch = "数据源不一致"
-}
-
-/// 单个维度的差异对比详情
-struct DataQualityDiffItem {
-    let dimension: String  // "Token" / "Message" / "Session" / "Tool"
-    let jsonlValue: Int64
-    let cacheValue: Int64
-    let diffRatio: Double
-    let reason: DataQualityReason
-    let suggestion: String
-}
-
-/// diffBreakdown 聚合，四个维度各一条
-struct DataQualityDiffBreakdown {
-    let items: [DataQualityDiffItem]
-}
-
-struct DataQualityStatus {
-    let level: DataQualityLevel
-    let summary: String
-    let sourceDate: String?
-    let isCacheStale: Bool
-    let tokenDiffRatio: Double?
-    let messageDiffRatio: Double?
-    let sessionDiffRatio: Double?
-    let toolDiffRatio: Double?
-    let diffBreakdown: DataQualityDiffBreakdown?
-}
-
 class AppState: ObservableObject {
     static let shared = AppState()
 
@@ -94,83 +43,25 @@ class AppState: ObservableObject {
     private let resolver = ProjectResolver()
     private let fileWatcher = FileWatcher()
     private let hookServer = HookServer()
-    private var pollingTimers: [PollingDataType: Timer] = [:]
+    private lazy var pollingEngine: PollingEngine = {
+        let engine = PollingEngine { [weak self] type in
+            self?.loadDataType(type)
+        }
+        return engine
+    }()
     private var cancellables = Set<AnyCancellable>()
-
-    // MARK: - Per-Type Polling State
-
-    /// 不同数据源的轮询频率（秒）
-    enum PollingDataType: String, CaseIterable {
-        case sessions    // 活跃会话 + 用量：10s
-        case todayStats  // 今日统计：30s
-        case history     // 历史会话：60s
-        case weeklyData  // 周数据：60s
-
-        var defaultInterval: TimeInterval {
-            switch self {
-            case .sessions: return 10
-            case .todayStats: return 30
-            case .history: return 60
-            case .weeklyData: return 60
-            }
-        }
-    }
-
-    private struct PollingState {
-        var elapsed: TimeInterval = 0
-        var interval: TimeInterval
-        var backoffMultiplier: Int = 1  // 指数退避乘数
-
-        mutating func onBackoffReset() {
-            backoffMultiplier = 1
-        }
-
-        mutating func onBackoffIncrease() {
-            backoffMultiplier = min(backoffMultiplier * 2, 60)
-        }
-
-        var effectiveInterval: TimeInterval {
-            min(interval * Double(backoffMultiplier), 60)
-        }
-    }
-
-    private var pollingStates: [PollingDataType: PollingState] = [:]
 
     // MARK: - Init
 
     init() {
         preferences.load()
-        startPolling()
-    }
-
-    deinit {
-        for timer in pollingTimers.values {
-            timer.invalidate()
-        }
-        fileWatcher.stopAll()
-        hookServer?.stop()
-    }
-
-    // MARK: - Multi-Frequency Polling
-
-    private func startPolling() {
-        // 初始化各数据类型的轮询状态
-        for type in PollingDataType.allCases {
-            pollingStates[type] = PollingState(interval: type.defaultInterval)
-        }
+        pollingEngine.startPolling()
 
         // 立即执行全量加载
         refreshData()
 
-        // 创建定时器：每 5 秒 tick 一次，按各自间隔调度
-        let timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            self?.tickPolling()
-        }
-        pollingTimers[.sessions] = timer  // 只需一个 tick 定时器
-
         // 设置文件监听：活跃会话 JSONL 文件变更时立即刷新
         fileWatcher.setOnChangeHandler { [weak self] _ in
-            // 文件变更时立即触发会话 + 统计刷新
             self?.loadSessions()
             self?.loadTodayStats()
         }
@@ -178,7 +69,6 @@ class AppState: ObservableObject {
         // 设置 hooks 监听：Claude Code 工具调用事件到达时立即刷新
         hookServer?.setEventHandler { [weak self] event in
             guard event.isPostTool else { return }
-            // PostToolUse 事件触发时立即刷新会话和统计
             self?.loadSessions()
             self?.loadTodayStats()
         }
@@ -188,26 +78,20 @@ class AppState: ObservableObject {
         preferences.$refreshInterval
             .dropFirst()
             .sink { [weak self] _ in
-                self?.refreshData()  // 偏好变更时触发全量刷新
+                self?.refreshData()
             }
             .store(in: &cancellables)
     }
 
-    private func tickPolling() {
-        for type in PollingDataType.allCases {
-            guard var state = pollingStates[type] else { continue }
-            state.elapsed += 5
-
-            if state.elapsed >= state.effectiveInterval {
-                state.elapsed = 0
-                loadDataType(type)
-            }
-
-            pollingStates[type] = state
-        }
+    deinit {
+        pollingEngine.stopPolling()
+        fileWatcher.stopAll()
+        hookServer?.stop()
     }
 
-    private func loadDataType(_ type: PollingDataType) {
+    // MARK: - Data Loading
+
+    private func loadDataType(_ type: PollingEngine.PollingDataType) {
         switch type {
         case .sessions: loadSessions()
         case .todayStats: loadTodayStats()
@@ -238,24 +122,21 @@ class AppState: ObservableObject {
                         toolCallCount: usage.toolCallCount,
                         entrypoint: info.entrypoint
                     ))
-                    // 收集 JSONL 文件路径（用于文件监听）
                     if let basePath = self.reader.resolveSessionBasePath(cwd: info.cwd, sessionId: info.sessionId) {
                         jsonlPaths.insert("\(basePath).jsonl")
                     }
                 }
-                // 持久化到 SQLite
                 let tuples = active.map { ($0.id, $0.pid, $0.projectPath, $0.projectId, $0.startedAt, $0.messageCount, $0.toolCallCount, $0.entrypoint) }
                 self.reader.persistSessions(tuples, usages: usages)
-                // 更新文件监听列表
                 self.fileWatcher.watch(paths: jsonlPaths)
                 DispatchQueue.main.async {
                     self.currentSessions = active
                     self.sessionUsages = usages
                 }
-                self.pollingStates[.sessions]?.onBackoffReset()
+                self.pollingEngine.markRefreshed(.sessions)
             } catch {
                 print("读取活跃会话失败: \(error)")
-                self.pollingStates[.sessions]?.onBackoffIncrease()
+                self.pollingEngine.markError(.sessions)
             }
         }
     }
@@ -277,7 +158,6 @@ class AppState: ObservableObject {
                     let startedAt = Date(timeIntervalSince1970: Double(entry.timestamp) / 1000.0)
                     let usage = self.reader.readSessionUsage(cwd: project, sessionId: sid)
                     usages[sid] = usage
-                    // endedAt: JSONL 最后消息时间戳；无数据时 fallback 到 startedAt
                     let endedAt: Date? = usage.lastMessageTimestamp ?? startedAt
                     let durationSec: TimeInterval = if let ended = endedAt {
                         max(ended.timeIntervalSince(startedAt), 1)
@@ -297,10 +177,10 @@ class AppState: ObservableObject {
                     self.historySessions = history
                     self.historyUsages = usages
                 }
-                self.pollingStates[.history]?.onBackoffReset()
+                self.pollingEngine.markRefreshed(.history)
             } catch {
                 print("读取历史失败: \(error)")
-                self.pollingStates[.history]?.onBackoffIncrease()
+                self.pollingEngine.markError(.history)
             }
         }
     }
@@ -327,7 +207,7 @@ class AppState: ObservableObject {
                 let latestDay = cache.dailyActivity.last
                 let modelRatios = Self.modelRatios(from: cache.modelUsage)
 
-                qualityStatus = Self.buildDataQualityStatus(
+                qualityStatus = DataQuality.buildStatus(
                     todayUsage: todayUsage, cache: cache, todayStr: todayStr
                 )
 
@@ -367,7 +247,6 @@ class AppState: ObservableObject {
                     toolCounts: toolCounts
                 )
 
-                // 持久化
                 self.reader.persistDailyStats(
                     date: todayStr, projectId: "_global",
                     messageCount: messageCount, sessionCount: sessionCount,
@@ -376,7 +255,6 @@ class AppState: ObservableObject {
                     cacheTokens: totalCacheTokens, modelBreakdown: breakdown
                 )
 
-                // 项目级聚合 + 持久化
                 let projectSummaries = self.reader.readTodayUsageByProject()
                 for project in projectSummaries {
                     self.reader.persistDailyStats(
@@ -397,13 +275,12 @@ class AppState: ObservableObject {
                     self.burnRate = self.burnRateTracker.currentRate
                     self.burnRateLevel = self.burnRateTracker.rateLevel
                     self.isBurnRateActive = self.burnRateTracker.isActive
-                    // 趋势图优先使用 todayStats（JSONL 实时数据），立即刷新
                     self.loadWeeklyData(todayStats: stats)
                 }
-                self.pollingStates[.todayStats]?.onBackoffReset()
+                self.pollingEngine.markRefreshed(.todayStats)
             } catch {
                 print("读取今日统计失败: \(error)")
-                self.pollingStates[.todayStats]?.onBackoffIncrease()
+                self.pollingEngine.markError(.todayStats)
             }
         }
     }
@@ -414,7 +291,6 @@ class AppState: ObservableObject {
             do {
                 let cache = try self.reader.readStatsCache()
                 let modelRatios = Self.modelRatios(from: cache.modelUsage)
-                // 优先使用 JSONL 实时数据（todayStats 参数传入），避免趋势图显示过时的 cache 数据
                 let weeklyData = Self.last7Days(
                     from: cache.dailyActivity,
                     dailyModelTokens: cache.dailyModelTokens,
@@ -422,21 +298,17 @@ class AppState: ObservableObject {
                     todayStats: todayStats ?? self.todayStats
                 )
                 DispatchQueue.main.async { self.weeklyData = weeklyData }
-                self.pollingStates[.weeklyData]?.onBackoffReset()
+                self.pollingEngine.markRefreshed(.weeklyData)
             } catch {
                 print("读取周数据失败: \(error)")
-                self.pollingStates[.weeklyData]?.onBackoffIncrease()
+                self.pollingEngine.markError(.weeklyData)
             }
         }
     }
 
     /// 手动全量刷新（覆盖正常间隔立即加载）
     func refreshData() {
-        for type in PollingDataType.allCases {
-            guard let state = pollingStates[type] else { continue }
-            pollingStates[type]?.elapsed = state.effectiveInterval
-            loadDataType(type)
-        }
+        pollingEngine.refreshAll()
     }
 
     // MARK: - Weekly Data Helper
@@ -458,172 +330,7 @@ class AppState: ObservableObject {
         return modelRatios
     }
 
-    static func buildDataQualityStatus(
-        todayUsage: (
-            messageCount: Int,
-            sessionCount: Int,
-            toolCallCount: Int,
-            totalTokens: Int64,
-            inputTokens: Int64,
-            outputTokens: Int64,
-            cacheTokens: Int64,
-            modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)],
-            toolCounts: [String: Int]
-        ),
-        cache: StatsCache,
-        todayStr: String
-    ) -> DataQualityStatus {
-        let todayCacheActivity = cache.dailyActivity.first { $0.date == todayStr }
-        let cacheDayTokens = cache.dailyModelTokens.first { $0.date == todayStr }?.tokensByModel.values.reduce(0, +) ?? 0
-        let isCacheStale = cache.lastComputedDate < todayStr
-
-        guard let day = todayCacheActivity else {
-            let summary = isCacheStale
-                ? "stats-cache 尚未更新到今天，已优先使用实时 JSONL"
-                : "缺少今日 cache 基线，已使用实时 JSONL"
-            return DataQualityStatus(
-                level: isCacheStale ? .warning : .unavailable,
-                summary: summary,
-                sourceDate: cache.lastComputedDate,
-                isCacheStale: isCacheStale,
-                tokenDiffRatio: nil,
-                messageDiffRatio: nil,
-                sessionDiffRatio: nil,
-                toolDiffRatio: nil,
-                diffBreakdown: nil
-            )
-        }
-
-        let cacheTokens = day.totalTokens > 0 ? day.totalTokens : cacheDayTokens
-
-        let tokenDiff = diffRatio(lhs: todayUsage.totalTokens, rhs: cacheTokens)
-        let messageDiff = diffRatio(lhs: Int64(todayUsage.messageCount), rhs: Int64(day.messageCount))
-        let sessionDiff = diffRatio(lhs: Int64(todayUsage.sessionCount), rhs: Int64(day.sessionCount))
-        let toolDiff = diffRatio(lhs: Int64(todayUsage.toolCallCount), rhs: Int64(day.toolCallCount))
-
-        // 构建 diffBreakdown — 每个维度提供详细对比
-        let items = buildDiffBreakdown(
-            todayUsage: todayUsage,
-            day: day,
-            cacheTokens: cacheTokens,
-            tokenDiff: tokenDiff,
-            messageDiff: messageDiff,
-            sessionDiff: sessionDiff,
-            toolDiff: toolDiff,
-            isCacheStale: isCacheStale
-        )
-
-        let maxDiff = [tokenDiff, messageDiff, sessionDiff, toolDiff].max() ?? 0
-        let level: DataQualityLevel
-        let summary: String
-
-        if maxDiff > 0.35 {
-            level = .critical
-            summary = "实时统计与 cache 偏差较大，建议检查数据源或触发全量重扫"
-        } else if maxDiff > 0.15 || isCacheStale {
-            level = .warning
-            summary = isCacheStale
-                ? "实时统计正常，但 cache 存在延迟"
-                : "实时统计与 cache 有可见偏差"
-        } else {
-            level = .healthy
-            summary = "实时 JSONL 与 cache 校验一致"
-        }
-
-        return DataQualityStatus(
-            level: level,
-            summary: summary,
-            sourceDate: day.date,
-            isCacheStale: isCacheStale,
-            tokenDiffRatio: tokenDiff,
-            messageDiffRatio: messageDiff,
-            sessionDiffRatio: sessionDiff,
-            toolDiffRatio: toolDiff,
-            diffBreakdown: DataQualityDiffBreakdown(items: items)
-        )
-    }
-
-    private static func buildDiffBreakdown(
-        todayUsage: (
-            messageCount: Int, sessionCount: Int, toolCallCount: Int,
-            totalTokens: Int64, inputTokens: Int64, outputTokens: Int64,
-            cacheTokens: Int64, modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)],
-            toolCounts: [String: Int]
-        ),
-        day: DailyActivity,
-        cacheTokens: Int64,
-        tokenDiff: Double,
-        messageDiff: Double,
-        sessionDiff: Double,
-        toolDiff: Double,
-        isCacheStale: Bool
-    ) -> [DataQualityDiffItem] {
-        func reason(for diff: Double) -> DataQualityReason {
-            if diff <= 0.15 { return .normal }
-            if isCacheStale { return .cacheNotYetUpdated }
-            if todayUsage.totalTokens > 0 && cacheTokens == 0 { return .jsonlMissingUsage }
-            return .dataSourceMismatch
-        }
-        func suggestion(for diff: Double, _ reason: DataQualityReason) -> String {
-            if diff <= 0.15 { return "数据一致，无需操作" }
-            switch reason {
-            case .cacheNotYetUpdated: return "等待 stats-cache 下次刷新（通常间隔 5-15 分钟）"
-            case .jsonlMissingUsage: return "检查 JSONL 文件是否包含 assistant usage 记录"
-            case .dataSourceMismatch: return "触发全量重扫以同步数据源"
-            case .normal: return ""
-            }
-        }
-
-        return [
-            DataQualityDiffItem(
-                dimension: "Token",
-                jsonlValue: todayUsage.totalTokens,
-                cacheValue: cacheTokens,
-                diffRatio: tokenDiff,
-                reason: reason(for: tokenDiff),
-                suggestion: suggestion(for: tokenDiff, reason(for: tokenDiff))
-            ),
-            DataQualityDiffItem(
-                dimension: "Message",
-                jsonlValue: Int64(todayUsage.messageCount),
-                cacheValue: Int64(day.messageCount),
-                diffRatio: messageDiff,
-                reason: reason(for: messageDiff),
-                suggestion: suggestion(for: messageDiff, reason(for: messageDiff))
-            ),
-            DataQualityDiffItem(
-                dimension: "Session",
-                jsonlValue: Int64(todayUsage.sessionCount),
-                cacheValue: Int64(day.sessionCount),
-                diffRatio: sessionDiff,
-                reason: reason(for: sessionDiff),
-                suggestion: suggestion(for: sessionDiff, reason(for: sessionDiff))
-            ),
-            DataQualityDiffItem(
-                dimension: "Tool",
-                jsonlValue: Int64(todayUsage.toolCallCount),
-                cacheValue: Int64(day.toolCallCount),
-                diffRatio: toolDiff,
-                reason: reason(for: toolDiff),
-                suggestion: suggestion(for: toolDiff, reason(for: toolDiff))
-            ),
-        ]
-    }
-
-    static func diffRatio(lhs: Int64, rhs: Int64) -> Double {
-        if lhs == rhs {
-            return 0
-        }
-        let baseline = max(max(abs(lhs), abs(rhs)), 1)
-        return Double(abs(lhs - rhs)) / Double(baseline)
-    }
-
     /// 从 dailyActivity 和 dailyModelTokens 中提取最近 7 天的数据
-    /// - Parameters:
-    ///   - dailyActivity: stats-cache 中的每日活动统计
-    ///   - dailyModelTokens: stats-cache 中的每日模型 token 数据
-    ///   - modelRatios: 模型 token 拆分比例
-    ///   - todayStats: 实时 JSONL 数据（优先使用），nil 时 fallback 到 cache
     private static func last7Days(
         from dailyActivity: [DailyActivity],
         dailyModelTokens: [DailyModelTokens],
@@ -653,7 +360,6 @@ class AppState: ObservableObject {
             guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
             let dateStr = dateFormatter.string(from: date)
 
-            // 今天优先使用 JSONL 实时数据
             if offset == 0, let jsonl = todayStats {
                 result.append(DailyActivity(
                     date: dateStr,
