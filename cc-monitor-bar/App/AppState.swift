@@ -74,6 +74,7 @@ class AppState: ObservableObject {
     @Published var currentSessions: [Session] = []
     @Published var sessionUsages: [String: SessionUsage] = [:]
     @Published var historySessions: [Session] = []
+    @Published var historyUsages: [String: SessionUsage] = [:]
     @Published var todayStats: TodayStats?
     @Published var dataQualityStatus: DataQualityStatus?
     @Published var weeklyData: [DailyActivity] = []
@@ -265,6 +266,7 @@ class AppState: ObservableObject {
             do {
                 let historyEntries = try self.reader.readHistory(limit: 200)
                 var history: [Session] = []
+                var usages: [String: SessionUsage] = [:]
                 var seenIds = Set<String>()
                 for entry in historyEntries.reversed() {
                     guard let sid = entry.sessionId,
@@ -274,6 +276,7 @@ class AppState: ObservableObject {
                     let projectId = self.resolver.resolveProjectId(from: project)
                     let startedAt = Date(timeIntervalSince1970: Double(entry.timestamp) / 1000.0)
                     let usage = self.reader.readSessionUsage(cwd: project, sessionId: sid)
+                    usages[sid] = usage
                     // endedAt: JSONL 最后消息时间戳；无数据时 fallback 到 startedAt
                     let endedAt: Date? = usage.lastMessageTimestamp ?? startedAt
                     let durationSec: TimeInterval = if let ended = endedAt {
@@ -290,7 +293,10 @@ class AppState: ObservableObject {
                         entrypoint: "cli"
                     ))
                 }
-                DispatchQueue.main.async { self.historySessions = history }
+                DispatchQueue.main.async {
+                    self.historySessions = history
+                    self.historyUsages = usages
+                }
                 self.pollingStates[.history]?.onBackoffReset()
             } catch {
                 print("读取历史失败: \(error)")

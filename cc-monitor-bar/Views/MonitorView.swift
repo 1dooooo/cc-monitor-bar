@@ -59,7 +59,7 @@ struct MonitorView: View {
                 CollapsibleSection(title: "历史", isCollapsed: sectionBinding("history")) {
                     RecentSessionSection(
                         sessions: appState.historySessions,
-                        usages: appState.sessionUsages
+                        usages: appState.historyUsages
                     )
                 }
 
