@@ -413,7 +413,8 @@ class AppState: ObservableObject {
     /// 手动全量刷新（覆盖正常间隔立即加载）
     func refreshData() {
         for type in PollingDataType.allCases {
-            pollingStates[type]?.elapsed = pollingStates[type]?.effectiveInterval ?? type.defaultInterval
+            guard let state = pollingStates[type] else { continue }
+            pollingStates[type]?.elapsed = state.effectiveInterval
             loadDataType(type)
         }
     }
