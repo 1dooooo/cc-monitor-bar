@@ -4,7 +4,7 @@
 
 ## 概述
 
-应用只读取 `~/.claude/` 目录下的本地文件，不调用任何远程 API。所有数据来自 Claude Code CLI 自动写入的文件。
+应用只读取本地文件，不调用任何远程 API。默认数据根目录为 `~/.claude/`，并额外扫描 Xcode Claude 集成目录。
 
 ## 数据文件
 
@@ -62,7 +62,9 @@
 
 ### 3. projects/*/*.jsonl — 会话转录（核心数据源）
 
-**路径**: `~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl`
+**路径（多根目录）**:
+- `~/.claude/projects/<encoded-cwd>/<sessionId>.jsonl`
+- `~/Library/Developer/Xcode/CodingAssistant/ClaudeAgentConfig/projects/<encoded-cwd>/<sessionId>.jsonl`
 
 路径编码规则：将 cwd 的 `/` 替换为 `-`，例如 `/Users/ido/project/mac/cc-bar` → `-Users-ido-project-mac-cc-bar`
 
@@ -100,12 +102,13 @@
 
 **关键区分**:
 
-| 条件 | 含义 | usage 值 |
-|------|------|---------|
-| `stop_reason != null` | 最终汇总消息 | 完整精确值 |
-| `stop_reason == null` | 流式输出中间片段 | `{input_tokens: 0, output_tokens: 0}` |
+| 字段 | 作用 |
+|------|------|
+| `message.id` + `requestId` | 同一 assistant 响应在流式阶段会重复写入，需用于去重 |
+| `message.usage.*` | Token 统计来源，流式片段中不同字段会逐步更新 |
+| `content[].type == "tool_use"` | 工具调用统计来源（优先按 `tool_use.id` 去重） |
 
-**计算规则**: 只累加 `stop_reason != null` 的条目的 usage 字段。
+**计算规则**: assistant 消息按 `message.id(+requestId)` 去重，同一消息的 `input/output/cache` 按字段取最大值后再汇总。
 
 ### 4. projects/*/subagents/*.jsonl — 子代理转录
 
@@ -135,12 +138,38 @@ readSessionUsage(cwd, sessionId)
 ```
 
 `parseJsonlUsage` 算法：
-1. 逐行读取 JSONL
-2. `type == "user"` → messageCount++
-3. `type == "assistant"` 且 `stop_reason != null`:
-   - 累加 input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens
-   - 按 message.model 分组
-   - 统计 content 中 tool_use 数量
+1. 逐行读取 JSONL（可选按时间窗口过滤）
+2. `type == "user"` 且 `message.content` 为可见用户输入（字符串，或 `[{type:text}] / image / file` 等块）→ `messageCount++`（过滤 `tool_result`/thinking 包装事件）
+3. `type == "assistant"` 且存在 `message.usage`：
+   - 以 `message.id(+requestId)` 为键做去重
+   - 同键消息按字段取最大值：`input/output/cache_read/cache_creation`
+   - 按 `message.model` 聚合（含 per-model breakdown）
+   - `content[].type == tool_use`：优先按 `tool_use.id` 去重；无 id 时按 `name+input+message` 指纹去重
+4. 会话文件定位优先走 `cwd → encoded-cwd` 路径；若未命中，按 `sessionId` 跨项目目录兜底查找，避免路径编码差异导致漏读
+
+### 增量索引机制（性能与一致性）
+
+为避免每次轮询都全量重读 JSONL，解析器维护内存索引：
+
+- 索引键：`file path + dateRange + mtime/size/offset`
+- 增量策略：文件仅追加时只解析新增字节（从上次 offset 继续）
+- 回退策略：若检测到非追加改写（前缀探针不一致、文件变短），自动全量重建该文件索引
+- 上限控制：索引条目数超过阈值时按最近访问时间淘汰
+
+这套机制不会改变统计口径，只优化读取开销，并降低高频轮询时的 CPU 与 I/O 压力。
+
+### 数据质量校验（JSONL vs stats-cache）
+
+每次刷新会对“今日实时 JSONL 聚合”与 `stats-cache` 做对账：
+
+- 校验项：`totalTokens`、`messageCount`、`sessionCount`、`toolCallCount`
+- 输出级别：`healthy / warning / critical / unavailable`
+- 触发条件（当前实现）：
+  - 最大相对差异 > 35% → `critical`
+  - 最大相对差异 > 15% 或 cache 日期滞后 → `warning`
+  - 差异低且 cache 新鲜 → `healthy`
+
+UI 会展示校验结果，便于快速判断“统计偏差是缓存延迟，还是解析链路异常”。
 
 ### 已废弃方案：基线差值法
 
@@ -162,7 +191,8 @@ readSessionUsage(cwd, sessionId)
 │                                                           │
 │  history.jsonl      → readHistory()  → [HistoryEntry]    │
 │                                                           │
-│  stats-cache.json   → readStatsCache() → TodayStats      │
-│                                       + weeklyData        │
+│  (~/.claude/projects + Xcode projects)/*.jsonl            │
+│        → readTodayUsage()  → TodayStats                   │
+│  stats-cache.json   → readStatsCache() → 今日计数补充 + 7日趋势 │
 └───────────────────────────────────────────────────────────┘
 ```

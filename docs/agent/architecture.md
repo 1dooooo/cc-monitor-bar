@@ -27,9 +27,11 @@
                        │ 读取
                        ▼
 ┌─────────────────────────────────────────────────────┐
-│  本地文件 — ~/.claude/                                │
+│  本地文件 — ~/.claude/ + Xcode Claude projects        │
 │  stats-cache.json  history.jsonl  sessions/*.json    │
-│  projects/*/*.jsonl  projects/*/subagents/*.jsonl    │
+│  ~/.claude/projects/*/*.jsonl                         │
+│  ~/Library/.../ClaudeAgentConfig/projects/*/*.jsonl  │
+│  projects/*/subagents/*.jsonl                        │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -45,13 +47,16 @@ Timer (N 秒)
          读取 ~/.claude/sessions/*.json → [ActiveSessionInfo]
       2. 对每个活跃会话:
          ClaudeDataReader.readSessionUsage(cwd, sessionId)
-         读取 projects/<path>/<sessionId>.jsonl
+         优先读取 projects/<path>/<sessionId>.jsonl
+         若 cwd 映射未命中则按 sessionId 跨项目目录兜底查找
          + subagents/*.jsonl
          → SessionUsage (精确 Token 数据)
       3. ClaudeDataReader.readHistory(limit: 200)
          读取 ~/.claude/history.jsonl → [HistoryEntry]
-      4. ClaudeDataReader.readStatsCache()
-         读取 ~/.claude/stats-cache.json → 全局统计
+      4. ClaudeDataReader.readTodayUsage()
+         读取多根目录 projects/*/*.jsonl（按今日时间窗口）→ 今日 Token 精确统计
+      5. ClaudeDataReader.readStatsCache()
+         读取 ~/.claude/stats-cache.json → 今日计数补充 + 7 日趋势 + 质量对账
     → [主线程]
       更新 @Published 属性 → SwiftUI 自动刷新
 ```
@@ -63,17 +68,41 @@ Timer (N 秒)
 每个活跃会话的 Token 数据通过解析 `projects/<encoded-path>/<sessionId>.jsonl` 获取：
 
 1. 逐行读取 JSONL
-2. 只取 `type == "assistant"` 且 `stop_reason != null` 的消息（最终汇总，跳过流式片段）
-3. 累加 `usage` 字段中的 `input_tokens + output_tokens + cache_read_input_tokens + cache_creation_input_tokens`
-4. 同步扫描 `subagents/*.jsonl`，合并子代理的 Token 数据
-5. 按 `message.model` 分组统计各模型用量
+2. `type == "assistant"` 且存在 `message.usage` 时，按 `message.id(+requestId)` 去重
+3. 同一条消息按字段取最大值（input/output/cache），再做汇总
+4. `type == "user"` 统计可见用户输入（纯文本或 text/image/file 块，过滤 tool_result/thinking 包装内容）
+5. `tool_use` 按 `tool_use.id` 去重计数
+6. 同步扫描 `subagents/*.jsonl`，合并子代理数据
+7. 按 `message.model` 统计总量 + 输入/输出/缓存分解
+
+#### 增量解析索引
+
+`ClaudeDataReader` 在内存中维护 JSONL 索引（按 path + 时间窗口）：
+
+1. 记录 `offset/carry/mtime/size`
+2. 文件只追加时，仅解析新增字节
+3. 检测到改写/截断（前缀探针不一致）时自动全量重建
+4. 通过访问时间淘汰旧索引，防止内存增长失控
+
+这能显著降低固定轮询频率下的重复解析成本，并保持统计口径不变。
+
+#### 数据质量校验链路
+
+```
+readTodayUsage() (实时 JSONL)
+  + readStatsCache() (预聚合 cache)
+  → buildDataQualityStatus()
+  → AppState.dataQualityStatus
+  → TokenSummarySection 校验提示
+```
 
 ### 3. 项目路径转换
 
 ```
 cwd: "/Users/ido/project/mac/cc-bar"
 → cwdToProjectDir() → "-Users-ido-project-mac-cc-bar"
-→ 文件路径: ~/.claude/projects/-Users-ido-project-mac-cc-bar/<sessionId>.jsonl
+→ 文件路径（优先）: ~/.claude/projects/-Users-ido-project-mac-cc-bar/<sessionId>.jsonl
+→ 未命中时按 `sessionId` 在已配置项目根目录中兜底搜索
 ```
 
 ## 模块职责

@@ -23,7 +23,10 @@ struct MonitorView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: DesignTokens.spacingMD) {
-                TokenSummarySection(stats: appState.todayStats)
+                TokenSummarySection(
+                    stats: appState.todayStats,
+                    qualityStatus: appState.dataQualityStatus
+                )
 
                 TrendChartSection(
                     weeklyData: appState.weeklyData,

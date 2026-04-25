@@ -3,6 +3,7 @@ import SwiftUI
 /// 今日 Token 摘要卡片
 struct TokenSummarySection: View {
     let stats: TodayStats?
+    let qualityStatus: DataQualityStatus?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.spacingSM) {
@@ -26,10 +27,39 @@ struct TokenSummarySection: View {
                 TokenDetailRow(label: "↓ 输出", value: stats?.outputTokens ?? 0, color: .green)
                 TokenDetailRow(label: "⟳ 缓存", value: stats?.cacheTokens ?? 0, color: .teal)
             }
+
+            if let qualityStatus = qualityStatus {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(qualityColor(for: qualityStatus.level))
+                        .frame(width: 6, height: 6)
+                    Text("校验 \(qualityStatus.level.displayText)")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(qualityStatus.summary)
+                        .font(.system(size: 9))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+            }
         }
         .padding(DesignTokens.spacingMD)
         .background(GlassBackground().opacity(0.06))
         .cornerRadius(DesignTokens.radiusMD)
+    }
+
+    private func qualityColor(for level: DataQualityLevel) -> Color {
+        switch level {
+        case .healthy:
+            return .green
+        case .warning:
+            return .orange
+        case .critical:
+            return .red
+        case .unavailable:
+            return .gray
+        }
     }
 }
 
@@ -60,6 +90,15 @@ struct TokenDetailRow: View {
         outputTokens: 400_000,
         cacheTokens: 234_567,
         modelBreakdown: []
+    ), qualityStatus: DataQualityStatus(
+        level: .healthy,
+        summary: "实时 JSONL 与 cache 校验一致",
+        sourceDate: "2026-04-25",
+        isCacheStale: false,
+        tokenDiffRatio: 0.03,
+        messageDiffRatio: 0.02,
+        sessionDiffRatio: 0.01,
+        toolDiffRatio: 0.04
     ))
     .frame(width: 300)
     .padding()

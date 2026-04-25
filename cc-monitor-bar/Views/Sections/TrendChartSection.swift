@@ -29,9 +29,9 @@ struct TrendChartSection: View {
             HStack(alignment: .bottom, spacing: 4) {
                 ForEach(weeklyData.prefix(7), id: \.date) { day in
                     StackedBarDay(
-                        inputTokens: day.inputTokens,
-                        outputTokens: day.outputTokens,
-                        cacheTokens: day.cacheTokens,
+                        inputTokens: day.inputTokens ?? 0,
+                        outputTokens: day.outputTokens ?? 0,
+                        cacheTokens: day.cacheTokens ?? 0,
                         maxValue: maxValue,
                         isToday: isToday(day.date)
                     )
