@@ -79,6 +79,13 @@ class AppState: ObservableObject {
     @Published var weeklyData: [DailyActivity] = []
     @Published var isLoading = false
 
+    // MARK: - Burn Rate
+
+    private let burnRateTracker = BurnRateTracker()
+    @Published var burnRate: Double = 0
+    @Published var burnRateLevel: BurnRateTracker.RateLevel = .idle
+    @Published var isBurnRateActive: Bool = false
+
     // MARK: - Dependencies
 
     let preferences = AppPreferences.shared
@@ -281,6 +288,9 @@ class AppState: ObservableObject {
                 toolCounts: toolCounts
             )
 
+            // 更新 Burn Rate
+            self.burnRateTracker.update(totalTokens: totalTokens)
+
             DispatchQueue.main.async {
                 self.currentSessions = active
                 self.sessionUsages = usages
@@ -289,6 +299,9 @@ class AppState: ObservableObject {
                 self.dataQualityStatus = qualityStatus
                 self.weeklyData = weeklyData
                 self.isLoading = false
+                self.burnRate = self.burnRateTracker.currentRate
+                self.burnRateLevel = self.burnRateTracker.rateLevel
+                self.isBurnRateActive = self.burnRateTracker.isActive
             }
         }
     }

@@ -19,6 +19,12 @@ struct MonitorView: View {
                     qualityStatus: appState.dataQualityStatus
                 )
 
+                BurnRateSection(
+                    rate: appState.burnRate,
+                    level: appState.burnRateLevel,
+                    isActive: appState.isBurnRateActive
+                )
+
                 TrendChartSection(
                     weeklyData: appState.weeklyData,
                     period: $trendPeriod
