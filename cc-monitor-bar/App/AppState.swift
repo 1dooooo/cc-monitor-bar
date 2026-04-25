@@ -290,11 +290,46 @@ class AppState: ObservableObject {
                 toolCounts: toolCounts
             )
 
+            // 持久化会话和 token 用量到 SQLite
+            let sessionTuples = active.map { ($0.id, $0.pid, $0.projectPath, $0.projectId, $0.startedAt, $0.messageCount, $0.toolCallCount, $0.entrypoint) }
+            self.reader.persistSessions(sessionTuples, usages: usages)
+
+            // 持久化每日统计到 SQLite
+            let todayStr2 = Self.todayDateString()
+            self.reader.persistDailyStats(
+                date: todayStr2,
+                projectId: "_global",
+                messageCount: messageCount,
+                sessionCount: sessionCount,
+                toolCallCount: toolCallCount,
+                totalTokens: totalTokens,
+                inputTokens: totalInputTokens,
+                outputTokens: totalOutputTokens,
+                cacheTokens: totalCacheTokens,
+                modelBreakdown: breakdown
+            )
+
             // 更新 Burn Rate
             self.burnRateTracker.update(totalTokens: totalTokens)
 
             // 项目级聚合
             projectSummaries = self.reader.readTodayUsageByProject()
+
+            // 持久化每个项目的每日统计
+            for project in projectSummaries {
+                self.reader.persistDailyStats(
+                    date: todayStr2,
+                    projectId: project.name,
+                    messageCount: project.messageCount,
+                    sessionCount: project.sessionCount,
+                    toolCallCount: project.toolCallCount,
+                    totalTokens: project.totalTokens,
+                    inputTokens: project.inputTokens,
+                    outputTokens: project.outputTokens,
+                    cacheTokens: project.cacheTokens,
+                    modelBreakdown: []
+                )
+            }
 
             DispatchQueue.main.async {
                 self.currentSessions = active

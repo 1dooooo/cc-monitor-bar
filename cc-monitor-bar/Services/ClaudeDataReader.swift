@@ -65,6 +65,69 @@ class ClaudeDataReader {
         return try JSONDecoder().decode(StatsCache.self, from: data)
     }
 
+    // MARK: - Persistence
+
+    /// 持久化活跃会话到 SQLite
+    func persistSessions(_ sessions: [(id: String, pid: Int32, projectPath: String, projectId: String, startedAt: Date, messageCount: Int, toolCallCount: Int, entrypoint: String)], usages: [String: SessionUsage]) {
+        let now = Date().timeIntervalSince1970
+        for session in sessions {
+            do {
+                _ = try db.run("""
+                    INSERT OR REPLACE INTO sessions (id, pid, project_path, project_id, started_at, ended_at, duration_ms, message_count, tool_call_count, entrypoint, updated_at)
+                    VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+                    """, session.id, Int64(session.pid), session.projectPath, session.projectId,
+                    session.startedAt.timeIntervalSince1970,
+                    Int64(Date().timeIntervalSince1970 * 1000) - Int64(session.startedAt.timeIntervalSince1970 * 1000),
+                    Int64(session.messageCount), Int64(session.toolCallCount), session.entrypoint, now
+                )
+
+                if let usage = usages[session.id] {
+                    _ = try db.run("""
+                        INSERT OR REPLACE INTO session_token_usage (session_id, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, context_tokens)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """, session.id, usage.inputTokens, usage.outputTokens,
+                        usage.cacheReadTokens, usage.cacheCreationTokens, usage.contextTokens
+                    )
+                }
+            } catch {
+                // 忽略写入错误
+            }
+        }
+    }
+
+    /// 持久化每日统计到 SQLite
+    func persistDailyStats(
+        date: String,
+        projectId: String,
+        messageCount: Int,
+        sessionCount: Int,
+        toolCallCount: Int,
+        totalTokens: Int64,
+        inputTokens: Int64,
+        outputTokens: Int64,
+        cacheTokens: Int64,
+        modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)]
+    ) {
+        do {
+            _ = try db.run("""
+                INSERT OR REPLACE INTO daily_stats (date, project_id, message_count, session_count, tool_call_count, total_tokens, input_tokens, output_tokens, cache_tokens)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, date, projectId, messageCount, sessionCount, toolCallCount,
+                totalTokens, inputTokens, outputTokens, cacheTokens
+            )
+
+            for model in modelBreakdown {
+                _ = try db.run("""
+                    INSERT OR REPLACE INTO daily_model_usage (date, model, input_tokens, output_tokens, cache_tokens, total_tokens)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """, date, model.name, model.inputTokens, model.outputTokens, model.cacheTokens, model.tokens
+                )
+            }
+        } catch {
+            // 忽略写入错误
+        }
+    }
+
     /// 读取最新的备份文件，返回每个项目的最后使用数据
     func readLatestBackup() -> [String: ProjectBackupData] {
         var result: [String: ProjectBackupData] = [:]
