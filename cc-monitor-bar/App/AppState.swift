@@ -272,12 +272,19 @@ class AppState: ObservableObject {
                           !seenIds.contains(sid) else { continue }
                     seenIds.insert(sid)
                     let projectId = self.resolver.resolveProjectId(from: project)
+                    let startedAt = Date(timeIntervalSince1970: Double(entry.timestamp) / 1000.0)
+                    let usage = self.reader.readSessionUsage(cwd: project, sessionId: sid)
+                    let durationMs = max(Int64(Date().timeIntervalSince(startedAt) * 1000), 1)
+                    // 有实际用量数据 → 用实际时间范围标记已结束
+                    let endedAt: Date? = usage.totalTokens > 0
+                        ? startedAt.addingTimeInterval(max(Double(durationMs) / 1000.0, 1))
+                        : nil
                     history.append(Session(
                         id: sid, pid: 0, projectPath: project, projectId: projectId,
-                        startedAt: Date(timeIntervalSince1970: Double(entry.timestamp) / 1000.0),
-                        endedAt: Date(timeIntervalSince1970: Double(entry.timestamp) / 1000.0 + 3600),
-                        durationMs: 3600000,
-                        messageCount: 0, toolCallCount: 0, entrypoint: "cli"
+                        startedAt: startedAt, endedAt: endedAt,
+                        durationMs: durationMs,
+                        messageCount: usage.messageCount, toolCallCount: usage.toolCallCount,
+                        entrypoint: "cli"
                     ))
                 }
                 DispatchQueue.main.async { self.historySessions = history }
