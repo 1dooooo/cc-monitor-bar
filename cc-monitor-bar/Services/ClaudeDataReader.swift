@@ -316,6 +316,108 @@ class ClaudeDataReader {
         )
     }
 
+    // MARK: - Today Usage by Project
+
+    /// 按项目聚合 token/session 统计，返回按 token 用量降序排列的项目列表
+    func readTodayUsageByProject() -> [ProjectSummary] {
+        var projectData: [String: (
+            name: String,
+            messageCount: Int,
+            sessionCount: Int,
+            toolCallCount: Int,
+            totalTokens: Int64,
+            inputTokens: Int64,
+            outputTokens: Int64,
+            cacheTokens: Int64,
+            toolCounts: [String: Int]
+        )] = [:]
+
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: Date())
+        let tomorrowStart = calendar.date(byAdding: .day, value: 1, to: todayStart) ?? Date.distantFuture
+        let todayRange = DateInterval(start: todayStart, end: tomorrowStart)
+
+        let projectRoots = availableProjectRoots()
+        guard !projectRoots.isEmpty else { return [] }
+
+        for projectRoot in projectRoots {
+            guard let projectDirs = try? FileManager.default.contentsOfDirectory(atPath: projectRoot) else { continue }
+
+            for projectDir in projectDirs {
+                let projectPath = "\(projectRoot)/\(projectDir)"
+                let displayName = projectDirNameToDisplayName(projectDir)
+
+                guard let files = try? FileManager.default.contentsOfDirectory(atPath: projectPath) else { continue }
+                let jsonlFiles = files.filter { $0.hasSuffix(".jsonl") }
+
+                for file in jsonlFiles {
+                    let filePath = "\(projectPath)/\(file)"
+                    guard let attrs = try? FileManager.default.attributesOfItem(atPath: filePath),
+                          let modDate = attrs[.modificationDate] as? Date,
+                          modDate >= todayStart else { continue }
+
+                    var sessionUsage = parseJsonlUsage(at: filePath, within: todayRange)
+
+                    let sessionId = file.replacingOccurrences(of: ".jsonl", with: "")
+                    let subagentsDir = "\(projectPath)/\(sessionId)/subagents"
+                    if let agentFiles = try? FileManager.default.contentsOfDirectory(atPath: subagentsDir)
+                        .filter({ $0.hasSuffix(".jsonl") }) {
+                        for agentFile in agentFiles {
+                            let sub = parseJsonlUsage(at: "\(subagentsDir)/\(agentFile)", within: todayRange)
+                            sessionUsage = sessionUsage.merging(sub)
+                        }
+                    }
+
+                    if sessionUsage.totalTokens > 0 || sessionUsage.messageCount > 0 || sessionUsage.toolCallCount > 0 {
+                        var data = projectData[projectDir] ?? (
+                            name: displayName,
+                            messageCount: 0, sessionCount: 0, toolCallCount: 0,
+                            totalTokens: 0, inputTokens: 0, outputTokens: 0,
+                            cacheTokens: 0, toolCounts: [:]
+                        )
+                        data.sessionCount += 1
+                        data.messageCount += sessionUsage.messageCount
+                        data.toolCallCount += sessionUsage.toolCallCount
+                        data.totalTokens += sessionUsage.totalTokens
+                        data.inputTokens += sessionUsage.inputTokens
+                        data.outputTokens += sessionUsage.outputTokens
+                        data.cacheTokens += sessionUsage.cacheReadTokens + sessionUsage.cacheCreationTokens
+                        for (tool, count) in sessionUsage.toolCounts {
+                            data.toolCounts[tool, default: 0] += count
+                        }
+                        projectData[projectDir] = data
+                    }
+                }
+            }
+        }
+
+        return projectData.values
+            .filter { $0.totalTokens > 0 || $0.messageCount > 0 }
+            .map {
+                ProjectSummary(
+                    name: $0.name,
+                    messageCount: $0.messageCount,
+                    sessionCount: $0.sessionCount,
+                    toolCallCount: $0.toolCallCount,
+                    totalTokens: $0.totalTokens,
+                    inputTokens: $0.inputTokens,
+                    outputTokens: $0.outputTokens,
+                    cacheTokens: $0.cacheTokens,
+                    toolCounts: $0.toolCounts
+                )
+            }
+            .sorted { $0.totalTokens > $1.totalTokens }
+    }
+
+    /// 将编码后的项目目录名转为可读名称
+    private func projectDirNameToDisplayName(_ dirName: String) -> String {
+        // 去除前导 `-`
+        let stripped = dirName.hasPrefix("-") ? String(dirName.dropFirst()) : dirName
+        // 尝试从原始路径中提取项目名 (最后一段路径)
+        // 由于编码会丢失信息，这里使用 heuristic: 查找已知的 cwd 映射
+        return stripped
+    }
+
     // MARK: - JSONL Parsing
 
     private struct JsonlRangeKey: Hashable {

@@ -37,6 +37,10 @@ struct MonitorView: View {
                     usages: appState.sessionUsages
                 )
 
+                ProjectSummarySection(
+                    projects: appState.projectSummaries
+                )
+
                 RecentSessionSection(
                     sessions: appState.historySessions,
                     usages: appState.sessionUsages

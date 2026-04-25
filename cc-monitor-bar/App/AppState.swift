@@ -78,6 +78,7 @@ class AppState: ObservableObject {
     @Published var dataQualityStatus: DataQualityStatus?
     @Published var weeklyData: [DailyActivity] = []
     @Published var isLoading = false
+    @Published var projectSummaries: [ProjectSummary] = []
 
     // MARK: - Burn Rate
 
@@ -141,6 +142,7 @@ class AppState: ObservableObject {
             var stats: TodayStats?
             var qualityStatus: DataQualityStatus?
             var weeklyData: [DailyActivity] = []
+            var projectSummaries: [ProjectSummary] = []
 
             // 1. 活跃会话 + per-session usage
             do {
@@ -291,6 +293,9 @@ class AppState: ObservableObject {
             // 更新 Burn Rate
             self.burnRateTracker.update(totalTokens: totalTokens)
 
+            // 项目级聚合
+            projectSummaries = self.reader.readTodayUsageByProject()
+
             DispatchQueue.main.async {
                 self.currentSessions = active
                 self.sessionUsages = usages
@@ -298,6 +303,7 @@ class AppState: ObservableObject {
                 self.todayStats = stats
                 self.dataQualityStatus = qualityStatus
                 self.weeklyData = weeklyData
+                self.projectSummaries = projectSummaries
                 self.isLoading = false
                 self.burnRate = self.burnRateTracker.currentRate
                 self.burnRateLevel = self.burnRateTracker.rateLevel
