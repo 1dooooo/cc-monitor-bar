@@ -290,11 +290,9 @@ class AppState: ObservableObject {
             guard let self else { return }
             do {
                 let cache = try self.reader.readStatsCache()
-                let modelRatios = Self.modelRatios(from: cache.modelUsage)
                 let weeklyData = Self.last7Days(
                     from: cache.dailyActivity,
                     dailyModelTokens: cache.dailyModelTokens,
-                    modelRatios: modelRatios,
                     todayStats: todayStats ?? self.todayStats
                 )
                 DispatchQueue.main.async { self.weeklyData = weeklyData }
@@ -334,7 +332,6 @@ class AppState: ObservableObject {
     private static func last7Days(
         from dailyActivity: [DailyActivity],
         dailyModelTokens: [DailyModelTokens],
-        modelRatios: [String: (input: Double, output: Double, cache: Double)],
         todayStats: TodayStats?
     ) -> [DailyActivity] {
         let dateFormatter = DateFormatter()
@@ -374,29 +371,17 @@ class AppState: ObservableObject {
             }
 
             if let existing = activityMap[dateStr] {
-                var inp: Int64 = 0, out: Int64 = 0, cache: Int64 = 0
-
-                if let dayTokens = dailyModelTokens.first(where: { $0.date == dateStr }) {
-                    for (model, tokens) in dayTokens.tokensByModel {
-                        if let ratio = modelRatios[model] {
-                            inp += Int64(Double(tokens) * ratio.input)
-                            out += Int64(Double(tokens) * ratio.output)
-                            cache += Int64(Double(tokens) * ratio.cache)
-                        } else {
-                            inp += tokens
-                        }
-                    }
-                }
-
+                // 直接使用 DailyActivity 已有的 input/output/cache 值（不再用 modelRatios 拆分）
                 let updated = DailyActivity(
                     date: existing.date,
                     messageCount: existing.messageCount,
                     sessionCount: existing.sessionCount,
                     toolCallCount: existing.toolCallCount,
-                    inputTokens: existing.inputTokens ?? inp,
-                    outputTokens: existing.outputTokens ?? out,
-                    cacheTokens: existing.cacheTokens ?? cache
+                    inputTokens: existing.inputTokens,
+                    outputTokens: existing.outputTokens,
+                    cacheTokens: existing.cacheTokens
                 )
+                result.append(updated)
                 result.append(updated)
             } else {
                 result.append(DailyActivity(date: dateStr, messageCount: 0, sessionCount: 0, toolCallCount: 0, inputTokens: tokensMap[dateStr], outputTokens: nil, cacheTokens: nil))
