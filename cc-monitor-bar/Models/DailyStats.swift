@@ -12,6 +12,7 @@ struct DailyStats: Identifiable, Codable {
 
     var id: String { "\(date)-\(projectId)" }
 
+    /// 注意：totalTokens 始终非负（init 保证 input/output/cache 为 Int64 非可选）
     var totalTokens: Int64 {
         inputTokens + outputTokens + cacheTokens
     }
