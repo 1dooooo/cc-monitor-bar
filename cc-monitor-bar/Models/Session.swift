@@ -39,6 +39,8 @@ struct Session: Identifiable, Codable {
     }
 
     /// 活跃会话 — 无 token 数据时使用零值
+    /// ⚠️ 注意：token 字段（inputTokens/outputTokens 等）始终为 0。
+    ///    显示时应使用对应的 SessionUsage 获取真实 token 数据。
     init(
         id: String, pid: Int32, projectPath: String, projectId: String,
         startedAt: Date, endedAt: Date?, durationMs: Int64,
