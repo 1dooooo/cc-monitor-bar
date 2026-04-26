@@ -398,7 +398,6 @@ class AppState: ObservableObject {
                     cacheTokens: existing.cacheTokens
                 )
                 result.append(updated)
-                result.append(updated)
             } else {
                 result.append(DailyActivity(date: dateStr, messageCount: 0, sessionCount: 0, toolCallCount: 0, inputTokens: tokensMap[dateStr], outputTokens: nil, cacheTokens: nil))
             }
