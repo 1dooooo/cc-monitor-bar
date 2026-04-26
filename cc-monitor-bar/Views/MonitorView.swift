@@ -2,9 +2,6 @@ import SwiftUI
 
 struct MonitorView: View {
     @EnvironmentObject var appState: AppState
-    @State private var trendPeriod: TrendPeriod = .week
-
-    // 4.2 折叠状态
     @State private var collapsedSections: Set<String> = []
 
     private var topTools: [(name: String, count: Int)] {
@@ -34,8 +31,7 @@ struct MonitorView: View {
 
                 CollapsibleSection(title: "趋势", isCollapsed: sectionBinding("trend")) {
                     TrendChartSection(
-                        weeklyData: appState.weeklyData,
-                        period: $trendPeriod
+                        weeklyData: appState.weeklyData
                     )
                 }
 
@@ -108,11 +104,6 @@ struct MonitorView: View {
     private func syncCollapsedSections() {
         collapsedSections = appState.preferences.collapsedSections
     }
-}
-
-enum TrendPeriod: String, CaseIterable {
-    case week = "周"
-    case month = "月"
 }
 
 #Preview {

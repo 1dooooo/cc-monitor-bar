@@ -3,7 +3,6 @@ import SwiftUI
 /// 趋势图 — 单色柱状图（每日 Token 总量）
 struct TrendChartSection: View {
     let weeklyData: [DailyActivity]
-    @Binding var period: TrendPeriod
 
     private var maxValue: Int64 {
         guard !weeklyData.isEmpty else { return 1 }
@@ -12,18 +11,9 @@ struct TrendChartSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.spacingSM) {
-            HStack {
-                Text("趋势")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Picker("", selection: $period) {
-                    Text("周").tag(TrendPeriod.week)
-                    Text("月").tag(TrendPeriod.month)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 60)
-            }
+            Text("趋势")
+                .font(.caption)
+                .foregroundColor(.secondary)
 
             // 单色柱状图
             HStack(alignment: .bottom, spacing: 4) {
@@ -119,7 +109,6 @@ struct SingleBarDay: View {
             DailyActivity(date: "2026-04-02", messageCount: 40, sessionCount: 2, toolCallCount: 180, inputTokens: 24000, outputTokens: 12000, cacheTokens: 4000),
             DailyActivity(date: "2026-04-03", messageCount: 90, sessionCount: 5, toolCallCount: 400, inputTokens: 54000, outputTokens: 27000, cacheTokens: 9000),
         ],
-        period: .constant(.week)
     )
     .frame(width: 300)
     .padding()
