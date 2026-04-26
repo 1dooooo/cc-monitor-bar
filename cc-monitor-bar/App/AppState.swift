@@ -146,33 +146,49 @@ class AppState: ObservableObject {
             guard let self else { return }
             do {
                 let historyEntries = try self.reader.readHistory(limit: 200)
+                let ioSemaphore = DispatchSemaphore(value: 10)
+                let lock = NSLock()
                 var history: [Session] = []
                 var usages: [String: SessionUsage] = [:]
                 var seenIds = Set<String>()
-                for entry in historyEntries.reversed() {
+
+                DispatchQueue.concurrentPerform(iterations: historyEntries.count) { idx in
+                    let entry = historyEntries[idx]
+                    ioSemaphore.wait()
+
                     guard let sid = entry.sessionId,
-                          let project = entry.project,
-                          !seenIds.contains(sid) else { continue }
-                    seenIds.insert(sid)
+                          let project = entry.project else {
+                        ioSemaphore.signal()
+                        return
+                    }
+
                     let projectId = self.resolver.resolveProjectId(from: project)
                     let startedAt = Date(timeIntervalSince1970: Double(entry.timestamp) / 1000.0)
                     let usage = self.reader.readSessionUsage(cwd: project, sessionId: sid)
-                    usages[sid] = usage
+                    ioSemaphore.signal()
+
+                    lock.lock()
+                    defer { lock.unlock() }
+
+                    guard !seenIds.contains(sid) else { return }
+                    seenIds.insert(sid)
+
                     let endedAt: Date? = usage.lastMessageTimestamp ?? startedAt
                     let durationSec: TimeInterval = if let ended = endedAt {
                         max(ended.timeIntervalSince(startedAt), 1)
                     } else {
                         Date().timeIntervalSince(startedAt)
                     }
-                    let durationMs = Int64(durationSec * 1000)
                     history.append(Session(
                         id: sid, pid: 0, projectPath: project, projectId: projectId,
                         startedAt: startedAt, endedAt: endedAt,
-                        durationMs: durationMs,
+                        durationMs: Int64(durationSec * 1000),
                         messageCount: usage.messageCount, toolCallCount: usage.toolCallCount,
                         entrypoint: "cli"
                     ))
+                    usages[sid] = usage
                 }
+
                 DispatchQueue.main.async {
                     self.historySessions = history
                     self.historyUsages = usages
