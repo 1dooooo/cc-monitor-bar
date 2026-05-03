@@ -46,14 +46,12 @@ struct SessionCard: View {
                 Text(projectName(session.projectPath))
                     .font(.system(size: 10, weight: .medium))
                 Spacer()
-                if let usage = usage {
-                    Text("\(usage.messageCount) msg")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                    Text(session.durationFormatted)
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                }
+                Text("\(session.messageCount) msg")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+                Text(session.durationFormatted)
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
             }
 
             HStack(spacing: DesignTokens.spacingMD) {
@@ -96,7 +94,6 @@ struct SessionCard: View {
                 }
             }
 
-            // Context Window 累计使用量
             if let usage = usage, usage.contextTokens > 0 {
                 ContextLabel(contextTokens: usage.contextTokens)
             }

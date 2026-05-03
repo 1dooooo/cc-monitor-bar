@@ -4,10 +4,17 @@ import SwiftUI
 struct TrendChartSection: View {
     let weeklyData: [DailyActivity]
     @EnvironmentObject var preferences: AppPreferences
+    @State private var hoveredIndex: Int? = nil
 
     private var maxValue: Int64 {
         guard !weeklyData.isEmpty else { return 1 }
         return weeklyData.map { $0.totalTokens }.max() ?? 1
+    }
+
+    private var barWidth: CGFloat {
+        let totalWidth = DesignTokens.popoverWidthStandard - DesignTokens.spacingMD * 2
+        let totalSpacing: CGFloat = 4 * 6
+        return max((totalWidth - totalSpacing) / 7, 10)
     }
 
     var body: some View {
@@ -17,17 +24,27 @@ struct TrendChartSection: View {
                 .foregroundColor(.secondary)
 
             HStack(alignment: .bottom, spacing: 4) {
-                ForEach(weeklyData.prefix(7), id: \.date) { day in
-                    StackedBarDay(day: day, maxValue: maxValue)
+                ForEach(Array(weeklyData.prefix(7).enumerated()), id: \.element.date) { index, day in
+                    StackedBarDay(day: day, maxValue: maxValue, barWidth: barWidth)
+                        .onHover { isHovered in
+                            hoveredIndex = isHovered ? index : nil
+                        }
+                        .overlay(alignment: .top) {
+                            if hoveredIndex == index && day.totalTokens > 0 {
+                                TrendTooltip(day: day)
+                                    .transition(.opacity)
+                            }
+                        }
                 }
             }
-            .frame(height: 60)
+            .frame(height: 80)
 
             HStack(spacing: 4) {
                 ForEach(weeklyData.prefix(7), id: \.date) { day in
                     Text(dateLabel(for: day.date))
                         .font(.system(size: 8))
                         .foregroundColor(isToday(day.date) ? .orange : .secondary)
+                        .frame(width: barWidth)
                 }
             }
         }
@@ -57,6 +74,7 @@ struct TrendChartSection: View {
 struct StackedBarDay: View {
     let day: DailyActivity
     let maxValue: Int64
+    let barWidth: CGFloat
 
     private var inputHeight: CGFloat {
         guard maxValue > 0 else { return 0 }
@@ -83,40 +101,39 @@ struct StackedBarDay: View {
     var body: some View {
         VStack(spacing: 0) {
             if day.totalTokens == 0 {
-                VStack(spacing: 0) {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.05))
-                        .frame(height: 2)
-                        .cornerRadius(2)
-                }
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.05))
+                    .frame(width: barWidth, height: 2)
+                    .cornerRadius(2)
             } else if !hasBreakdown {
                 VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color.blue.opacity(0.6))
+                        .frame(width: barWidth, height: max(CGFloat(day.totalTokens) / CGFloat(maxValue) * 50, 2))
+                        .cornerRadius(2)
                     Text("估")
                         .font(.system(size: 6))
                         .foregroundColor(.orange)
-                    Rectangle()
-                        .fill(Color.blue.opacity(0.6))
-                        .frame(height: max(CGFloat(day.totalTokens) / CGFloat(maxValue) * 50, 2))
-                        .cornerRadius(2)
+                        .frame(width: barWidth)
                 }
             } else {
                 VStack(spacing: 1) {
                     if cacheHeight > 0 {
                         Rectangle()
                             .fill(Color.teal)
-                            .frame(height: max(cacheHeight, 1))
+                            .frame(width: barWidth, height: max(cacheHeight, 1))
                             .cornerRadius(1)
                     }
                     if outputHeight > 0 {
                         Rectangle()
                             .fill(Color.green)
-                            .frame(height: max(outputHeight, 1))
+                            .frame(width: barWidth, height: max(outputHeight, 1))
                             .cornerRadius(1)
                     }
                     if inputHeight > 0 {
                         Rectangle()
                             .fill(Color.blue)
-                            .frame(height: max(inputHeight, 1))
+                            .frame(width: barWidth, height: max(inputHeight, 1))
                             .cornerRadius(1)
                     }
                 }
@@ -176,6 +193,10 @@ struct TrendTooltip: View {
             }
         }
         .padding(8)
+        .background(Color.primary.opacity(0.9))
+        .cornerRadius(6)
+        .shadow(radius: 4)
+        .offset(y: -4)
     }
 }
 
