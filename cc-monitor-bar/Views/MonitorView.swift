@@ -36,7 +36,10 @@ struct MonitorView: View {
                 }
 
                 CollapsibleSection(title: "模型", isCollapsed: sectionBinding("model")) {
-                    ModelConsumptionSection(modelBreakdown: appState.todayStats?.modelBreakdown ?? [])
+                    ModelConsumptionSection(
+                        modelBreakdown: appState.todayStats?.modelBreakdown ?? [],
+                        totalTokens: appState.todayStats?.totalTokens ?? 0
+                    )
                 }
 
                 CollapsibleSection(title: "活跃会话", isCollapsed: sectionBinding("sessions")) {

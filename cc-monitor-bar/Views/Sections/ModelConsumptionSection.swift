@@ -3,9 +3,15 @@ import SwiftUI
 /// 模型消耗列表
 struct ModelConsumptionSection: View {
     let modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)]
+    let totalTokens: Int64
 
-    private var totalTokens: Int64 {
+    private var modelTotalTokens: Int64 {
         modelBreakdown.reduce(0) { $0 + $1.tokens }
+    }
+
+    private var coverageRatio: Double {
+        guard totalTokens > 0 else { return 0 }
+        return Double(modelTotalTokens) / Double(totalTokens)
     }
 
     var body: some View {
@@ -15,10 +21,29 @@ struct ModelConsumptionSection: View {
                 .foregroundColor(.secondary)
 
             if modelBreakdown.isEmpty {
-                Text("暂无模型数据")
-                    .font(.caption)
-                    .foregroundColor(.secondary.opacity(0.5))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("暂无模型数据")
+                        .font(.caption)
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text("可能原因：JSONL 文件未包含模型信息")
+                        .font(.system(size: 8))
+                        .foregroundColor(.secondary)
+                }
             } else {
+                if coverageRatio < 0.8 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(.orange)
+                        Text("部分模型数据缺失 (\(Int(coverageRatio * 100))%)")
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(4)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(4)
+                }
+
                 ForEach(modelBreakdown, id: \.name) { model in
                     ModelRow(
                         name: model.name,
@@ -122,11 +147,14 @@ struct ModelRow: View {
 }
 
 #Preview {
-    ModelConsumptionSection(modelBreakdown: [
-        ("claude-sonnet-4-5-20250929", 843_000, 500_000, 300_000, 43_000),
-        ("claude-opus-4-5-20251001", 248_000, 150_000, 80_000, 18_000),
-        ("claude-haiku-4-5-20251001", 149_000, 90_000, 50_000, 9_000),
-    ])
+    ModelConsumptionSection(
+        modelBreakdown: [
+            ("claude-sonnet-4-5-20250929", 843_000, 500_000, 300_000, 43_000),
+            ("claude-opus-4-5-20251001", 248_000, 150_000, 80_000, 18_000),
+            ("claude-haiku-4-5-20251001", 149_000, 90_000, 50_000, 9_000),
+        ],
+        totalTokens: 1_240_000
+    )
     .frame(width: 300)
     .padding()
 }
