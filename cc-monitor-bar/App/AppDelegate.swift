@@ -34,6 +34,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 4.1 动态菜单栏图标 — 根据活跃会话数和 Burn Rate 更新状态栏
         setupDynamicStatusBarIcon()
 
+        // 4.2 监听图标样式变化
+        appState.preferences.$iconStyle
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, let button = statusItem?.button else { return }
+                let sessionCount = appState.currentSessions.count
+                updateStatusBarIcon(sessionCount: sessionCount)
+            }
+            .store(in: &cancellables)
+
         popover = NSPopover()
         popover?.contentSize = NSSize(width: DesignTokens.popoverWidthStandard, height: DesignTokens.popoverHeight)
         popover?.contentViewController = NSHostingController(
@@ -137,8 +147,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let rateLevel = appState.burnRateLevel
         let isActive = sessionCount > 0
+        let iconStyle = appState.preferences.iconStyle
 
-        // 根据 Burn Rate 设置颜色
         let color: NSColor
         switch rateLevel {
         case .idle:
@@ -149,14 +159,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             color = .systemRed
         }
 
-        // 设置图标
-        let symbolName = isActive ? "chart.bar.fill" : "chart.bar"
-        if let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "CC Monitor") {
+        let baseSymbolName = iconStyle.systemSymbol
+        let finalSymbolName = isActive ? baseSymbolName : baseSymbolName.replacingOccurrences(of: ".fill", with: "")
+
+        if let image = NSImage(systemSymbolName: finalSymbolName, accessibilityDescription: "CC Monitor") {
             image.setTintColor(color)
             button.image = image
         }
 
-        // 显示会话数作为附加文本
         if isActive {
             button.title = " \(sessionCount)"
         } else {

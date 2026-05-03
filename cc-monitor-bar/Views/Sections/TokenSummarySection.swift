@@ -4,6 +4,12 @@ import SwiftUI
 struct TokenSummarySection: View {
     let stats: TodayStats?
     let qualityStatus: DataQualityStatus?
+    @EnvironmentObject var preferences: AppPreferences
+
+    private var estimatedCost: Double? {
+        guard let stats, !stats.modelBreakdown.isEmpty else { return nil }
+        return PricingTable.estimateTotalCost(breakdown: stats.modelBreakdown)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.spacingSM) {
@@ -19,6 +25,18 @@ struct TokenSummarySection: View {
                 } else {
                     Text("--")
                         .font(.system(size: 18, weight: .bold, design: .monospaced))
+                }
+            }
+
+            if preferences.showCostEstimate, let cost = estimatedCost {
+                HStack {
+                    Text("估算费用")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(String(format: "≈ $%.2f USD", cost))
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.orange)
                 }
             }
 

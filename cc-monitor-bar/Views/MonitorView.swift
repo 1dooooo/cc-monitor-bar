@@ -65,6 +65,23 @@ struct MonitorView: View {
                         topTools: topTools
                     )
                 }
+
+                if appState.preferences.enableBudgetWarning {
+                    CollapsibleSection(title: "预算进度", isCollapsed: sectionBinding("budget")) {
+                        BudgetSection(todayStats: appState.todayStats)
+                    }
+                }
+
+                CollapsibleSection(title: "会话统计", isCollapsed: sectionBinding("sessionSummary")) {
+                    SessionSummarySection(
+                        activeSessions: appState.currentSessions,
+                        todayStats: appState.todayStats
+                    )
+                }
+
+                CollapsibleSection(title: "使用量热力图", isCollapsed: sectionBinding("heatmap")) {
+                    UsageHeatmapView()
+                }
             }
             .padding(DesignTokens.spacingMD)
         }
