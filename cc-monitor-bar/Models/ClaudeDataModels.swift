@@ -10,6 +10,15 @@ struct StatsCache: Codable {
     let modelUsage: [String: ModelUsage]
 }
 
+/// 每日模型拆分（持久化到 stats-cache.json 时的 Codable 结构）
+struct DailyActivityModelEntry: Codable {
+    let name: String
+    let tokens: Int64
+    let inputTokens: Int64
+    let outputTokens: Int64
+    let cacheTokens: Int64
+}
+
 struct DailyActivity: Codable {
     let date: String
     let messageCount: Int
@@ -18,6 +27,7 @@ struct DailyActivity: Codable {
     let inputTokens: Int64?
     let outputTokens: Int64?
     let cacheTokens: Int64?
+    let modelBreakdown: [DailyActivityModelEntry]?
 
     var totalTokens: Int64 {
         (inputTokens ?? 0) + (outputTokens ?? 0) + (cacheTokens ?? 0)
@@ -32,9 +42,10 @@ struct DailyActivity: Codable {
         inputTokens = try container.decodeIfPresent(Int64.self, forKey: .inputTokens)
         outputTokens = try container.decodeIfPresent(Int64.self, forKey: .outputTokens)
         cacheTokens = try container.decodeIfPresent(Int64.self, forKey: .cacheTokens)
+        modelBreakdown = try container.decodeIfPresent([DailyActivityModelEntry].self, forKey: .modelBreakdown)
     }
 
-    init(date: String, messageCount: Int, sessionCount: Int, toolCallCount: Int, inputTokens: Int64?, outputTokens: Int64?, cacheTokens: Int64?) {
+    init(date: String, messageCount: Int, sessionCount: Int, toolCallCount: Int, inputTokens: Int64?, outputTokens: Int64?, cacheTokens: Int64?, modelBreakdown: [DailyActivityModelEntry]? = nil) {
         self.date = date
         self.messageCount = messageCount
         self.sessionCount = sessionCount
@@ -42,6 +53,7 @@ struct DailyActivity: Codable {
         self.inputTokens = inputTokens
         self.outputTokens = outputTokens
         self.cacheTokens = cacheTokens
+        self.modelBreakdown = modelBreakdown
     }
 }
 

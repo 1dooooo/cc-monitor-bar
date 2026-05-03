@@ -2,8 +2,19 @@ import SwiftUI
 
 /// 模型消耗列表
 struct ModelConsumptionSection: View {
-    let modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)]
-    let totalTokens: Int64
+    let todayStats: TodayStats?
+
+    private var modelBreakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)] {
+        todayStats?.modelBreakdown ?? []
+    }
+
+    private var totalTokens: Int64 {
+        todayStats?.totalTokens ?? 0
+    }
+
+    private var isLoading: Bool {
+        todayStats == nil
+    }
 
     private var modelTotalTokens: Int64 {
         modelBreakdown.reduce(0) { $0 + $1.tokens }
@@ -20,7 +31,16 @@ struct ModelConsumptionSection: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            if modelBreakdown.isEmpty {
+            if isLoading {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                    Text("加载中...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(8)
+            } else if modelBreakdown.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("暂无模型数据")
                         .font(.caption)
@@ -148,12 +168,17 @@ struct ModelRow: View {
 
 #Preview {
     ModelConsumptionSection(
-        modelBreakdown: [
-            ("claude-sonnet-4-5-20250929", 843_000, 500_000, 300_000, 43_000),
-            ("claude-opus-4-5-20251001", 248_000, 150_000, 80_000, 18_000),
-            ("claude-haiku-4-5-20251001", 149_000, 90_000, 50_000, 9_000),
-        ],
-        totalTokens: 1_240_000
+        todayStats: TodayStats(
+            messageCount: 50, sessionCount: 3, toolCallCount: 200,
+            totalTokens: 1_240_000, inputTokens: 790_000, outputTokens: 430_000,
+            cacheTokens: 70_000,
+            modelBreakdown: [
+                ("claude-sonnet-4-5-20250929", 843_000, 500_000, 300_000, 43_000),
+                ("claude-opus-4-5-20251001", 248_000, 150_000, 80_000, 18_000),
+                ("claude-haiku-4-5-20251001", 149_000, 90_000, 50_000, 9_000),
+            ],
+            toolCounts: ["Read": 100, "Write": 50]
+        )
     )
     .frame(width: 300)
     .padding()

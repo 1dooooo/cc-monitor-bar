@@ -23,24 +23,48 @@ struct TrendChartSection: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
 
-            HStack(alignment: .bottom, spacing: 4) {
-                ForEach(Array(weeklyData.prefix(7).enumerated()), id: \.element.date) { index, day in
-                    StackedBarDay(day: day, maxValue: maxValue, barWidth: barWidth)
-                        .onHover { isHovered in
-                            hoveredIndex = isHovered ? index : nil
-                        }
-                        .overlay(alignment: .top) {
-                            if hoveredIndex == index && day.totalTokens > 0 {
-                                TrendTooltip(day: day)
-                                    .transition(.opacity)
+            GeometryReader { geo in
+                let totalWidth = barWidth * 7 + 4 * 6
+                let originX = (geo.size.width - totalWidth) / 2
+
+                HStack(alignment: .bottom, spacing: 4) {
+                    ForEach(Array(weeklyData.prefix(7).enumerated()), id: \.element.date) { index, day in
+                        StackedBarDay(day: day, maxValue: maxValue, barWidth: barWidth)
+                            .contentShape(Rectangle())
+                            .onHover { isHovered in
+                                hoveredIndex = isHovered ? index : hoveredIndex
                             }
+                    }
+                }
+                .onHover { isInside in
+                    if !isInside { hoveredIndex = nil }
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                        .onChanged { value in
+                            let x = value.location.x - originX
+                            let adjustedX = max(0, min(x, totalWidth))
+                            let idx = Int(adjustedX / (barWidth + 4))
+                            hoveredIndex = (idx >= 0 && idx < 7) ? idx : nil
                         }
+                        .onEnded { _ in
+                            // Keep last hovered index until onHover(false) fires
+                        }
+                )
+                .overlay {
+                    if let idx = hoveredIndex, idx < weeklyData.prefix(7).count,
+                       let day = weeklyData[safe: idx], day.totalTokens > 0 {
+                        TrendTooltip(day: day)
+                            .offset(x: barIndexOffset(at: idx, originX: originX))
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
                 }
             }
             .frame(height: 80)
 
             HStack(spacing: 4) {
-                ForEach(weeklyData.prefix(7), id: \.date) { day in
+                ForEach(Array(weeklyData.prefix(7).enumerated()), id: \.element.date) { index, day in
                     Text(dateLabel(for: day.date))
                         .font(.system(size: 8))
                         .foregroundColor(isToday(day.date) ? .orange : .secondary)
@@ -51,6 +75,13 @@ struct TrendChartSection: View {
         .padding(DesignTokens.spacingMD)
         .background(GlassBackground().opacity(0.04))
         .cornerRadius(DesignTokens.radiusMD)
+    }
+
+    private func barIndexOffset(at index: Int, originX: CGFloat) -> CGFloat {
+        let totalWidth = barWidth * 7 + 4 * 6
+        let startX = originX + barWidth / 2
+        let step = barWidth + 4
+        return startX + CGFloat(index) * step - totalWidth / 2
     }
 
     private func isToday(_ dateStr: String) -> Bool {
@@ -68,6 +99,12 @@ struct TrendChartSection: View {
         let mf = DateFormatter()
         mf.dateFormat = "MM/dd"
         return mf.string(from: date)
+    }
+}
+
+extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 
@@ -146,6 +183,10 @@ struct TrendTooltip: View {
     let day: DailyActivity
 
     private var estimatedCost: Double {
+        if let breakdown = day.modelBreakdown, !breakdown.isEmpty {
+            let tuples = breakdown.map { ($0.name, $0.tokens, $0.inputTokens, $0.outputTokens, $0.cacheTokens) }
+            return PricingTable.estimateTotalCost(breakdown: tuples)
+        }
         let breakdown: [(name: String, tokens: Int64, inputTokens: Int64, outputTokens: Int64, cacheTokens: Int64)] = [
             ("claude-sonnet-4", day.totalTokens, day.inputTokens ?? 0, day.outputTokens ?? 0, day.cacheTokens ?? 0)
         ]
@@ -157,6 +198,10 @@ struct TrendTooltip: View {
             Text(day.date)
                 .font(.system(size: 10, weight: .semibold))
             Divider()
+            if let breakdown = day.modelBreakdown, !breakdown.isEmpty {
+                modelBreakdownRows(breakdown)
+                Divider()
+            }
             HStack {
                 Text("输入")
                     .font(.system(size: 9))
@@ -196,7 +241,40 @@ struct TrendTooltip: View {
         .background(Color.primary.opacity(0.9))
         .cornerRadius(6)
         .shadow(radius: 4)
-        .offset(y: -4)
+    }
+
+    @ViewBuilder
+    private func modelBreakdownRows(_ breakdown: [DailyActivityModelEntry]) -> some View {
+        ForEach(Array(breakdown.enumerated()), id: \.offset) { _, model in
+            HStack {
+                Text(shortModelName(model.name))
+                    .font(.system(size: 9))
+                    .foregroundColor(colorForModel(model.name))
+                Spacer()
+                Text(model.tokens.formattedTokens)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(colorForModel(model.name))
+            }
+        }
+    }
+
+    private func shortModelName(_ name: String) -> String {
+        let lower = name.lowercased()
+        if lower.contains("sonnet") { return "Sonnet" }
+        if lower.contains("opus") { return "Opus" }
+        if lower.contains("haiku") { return "Haiku" }
+        if name.hasPrefix("claude-") {
+            return name.dropFirst(7).capitalized
+        }
+        return name
+    }
+
+    private func colorForModel(_ name: String) -> Color {
+        let lower = name.lowercased()
+        if lower.contains("sonnet") { return .blue }
+        if lower.contains("opus") { return .teal }
+        if lower.contains("haiku") { return .green }
+        return .orange
     }
 }
 

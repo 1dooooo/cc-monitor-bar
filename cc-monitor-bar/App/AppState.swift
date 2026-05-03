@@ -309,6 +309,7 @@ class AppState: ObservableObject {
                 let weeklyData = Self.last7Days(
                     from: cache.dailyActivity,
                     dailyModelTokens: cache.dailyModelTokens,
+                    modelUsage: cache.modelUsage,
                     todayStats: todayStats ?? self.todayStats
                 )
                 DispatchQueue.main.async { self.weeklyData = weeklyData }
@@ -348,6 +349,7 @@ class AppState: ObservableObject {
     private static func last7Days(
         from dailyActivity: [DailyActivity],
         dailyModelTokens: [DailyModelTokens],
+        modelUsage: [String: ModelUsage],
         todayStats: TodayStats?
     ) -> [DailyActivity] {
         let dateFormatter = DateFormatter()
@@ -355,17 +357,29 @@ class AppState: ObservableObject {
 
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        let todayStr = dateFormatter.string(from: today)
+        _ = dateFormatter.string(from: today) // ensure format is valid
+        let modelRatios = Self.modelRatios(from: modelUsage)
 
+        // 按日期建立 activityMap
         var activityMap: [String: DailyActivity] = [:]
         for activity in dailyActivity {
             activityMap[activity.date] = activity
         }
 
-        var tokensMap: [String: Int64] = [:]
+        // 按日期建立 dailyModelBreakdownMap
+        var dailyBreakdownMap: [String: [DailyActivityModelEntry]] = [:]
         for day in dailyModelTokens {
-            let total = day.tokensByModel.values.reduce(0, +)
-            tokensMap[day.date] = total
+            var entries: [DailyActivityModelEntry] = []
+            for (model, tokens) in day.tokensByModel {
+                let ratio = modelRatios[model] ?? (input: 1, output: 0, cache: 0)
+                let inp = Int64(Double(tokens) * ratio.input)
+                let out = Int64(Double(tokens) * ratio.output)
+                let cache = Int64(Double(tokens) * ratio.cache)
+                entries.append(DailyActivityModelEntry(name: model, tokens: tokens, inputTokens: inp, outputTokens: out, cacheTokens: cache))
+            }
+            if !entries.isEmpty {
+                dailyBreakdownMap[day.date] = entries.sorted { $0.tokens > $1.tokens }
+            }
         }
 
         var result: [DailyActivity] = []
@@ -373,7 +387,11 @@ class AppState: ObservableObject {
             guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
             let dateStr = dateFormatter.string(from: date)
 
+            // 今天的分支：使用 todayStats
             if offset == 0, let jsonl = todayStats {
+                let breakdown = jsonl.modelBreakdown.map { entry in
+                    DailyActivityModelEntry(name: entry.name, tokens: entry.tokens, inputTokens: entry.inputTokens, outputTokens: entry.outputTokens, cacheTokens: entry.cacheTokens)
+                }
                 result.append(DailyActivity(
                     date: dateStr,
                     messageCount: jsonl.messageCount,
@@ -381,29 +399,42 @@ class AppState: ObservableObject {
                     toolCallCount: jsonl.toolCallCount,
                     inputTokens: jsonl.inputTokens,
                     outputTokens: jsonl.outputTokens,
-                    cacheTokens: jsonl.cacheTokens
+                    cacheTokens: jsonl.cacheTokens,
+                    modelBreakdown: breakdown.isEmpty ? nil : breakdown
                 ))
                 continue
             }
 
+            // 历史数据
             if let existing = activityMap[dateStr] {
-                // 直接使用 DailyActivity 已有的 input/output/cache 值（不再用 modelRatios 拆分）
-                let updated = DailyActivity(
+                let breakdown: [DailyActivityModelEntry]? = if let db = dailyBreakdownMap[dateStr] { db } else { existing.modelBreakdown }
+                result.append(DailyActivity(
                     date: existing.date,
                     messageCount: existing.messageCount,
                     sessionCount: existing.sessionCount,
                     toolCallCount: existing.toolCallCount,
                     inputTokens: existing.inputTokens,
                     outputTokens: existing.outputTokens,
-                    cacheTokens: existing.cacheTokens
-                )
-                result.append(updated)
+                    cacheTokens: existing.cacheTokens,
+                    modelBreakdown: breakdown
+                ))
             } else {
-                result.append(DailyActivity(date: dateStr, messageCount: 0, sessionCount: 0, toolCallCount: 0, inputTokens: tokensMap[dateStr], outputTokens: nil, cacheTokens: nil))
+                // 仅有 tokensMap 数据
+                let tokens = tokensMap(from: dailyModelTokens)[dateStr]
+                let breakdown = dailyBreakdownMap[dateStr]
+                result.append(DailyActivity(date: dateStr, messageCount: 0, sessionCount: 0, toolCallCount: 0, inputTokens: tokens, outputTokens: nil, cacheTokens: nil, modelBreakdown: breakdown))
             }
         }
 
         return result
+    }
+
+    private static func tokensMap(from dailyModelTokens: [DailyModelTokens]) -> [String: Int64] {
+        var map: [String: Int64] = [:]
+        for day in dailyModelTokens {
+            map[day.date] = day.tokensByModel.values.reduce(0, +)
+        }
+        return map
     }
 
     static func todayDateString() -> String {
