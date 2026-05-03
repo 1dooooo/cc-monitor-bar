@@ -92,6 +92,7 @@ struct MonitorView: View {
             height: DesignTokens.popoverHeight
         )
         .themed(appState.preferences.colorTheme)
+        .environmentObject(appState.preferences)
         .onAppear {
             // 同步折叠状态到 UserDefaults
             syncCollapsedSections()
@@ -126,4 +127,5 @@ struct MonitorView: View {
 #Preview {
     MonitorView()
         .environmentObject(AppState.shared)
+        .environmentObject(AppPreferences())
 }
